@@ -9,6 +9,19 @@ const app = express();
 const port = Number(process.env.PORT || 3100);
 const jwtSecret = process.env.JWT_SECRET || 'local-dev-secret-change-me';
 const slotopolUrl = process.env.SLOTOPOL_URL || 'http://slotopol:8080';
+const slotopolClubId = Number(process.env.SLOTOPOL_CLUB_ID || 1);
+const slotopolPlayerId = Number(process.env.SLOTOPOL_PLAYER_ID || 3);
+const slotopolAdminEmail = process.env.SLOTOPOL_ADMIN_EMAIL || 'admin@example.org';
+const slotopolAdminSecret = process.env.SLOTOPOL_ADMIN_SECRET || '0YBoaT';
+const slotopolPlayerEmail = process.env.SLOTOPOL_PLAYER_EMAIL || 'player@example.org';
+const slotopolPlayerSecret = process.env.SLOTOPOL_PLAYER_SECRET || 'iVI05M';
+const slotopolGameAlias = process.env.SLOTOPOL_GAME_ALIAS || 'CT Interactive/Lucky Dollar';
+const slotopolLines = Number(process.env.SLOTOPOL_LINES || 30);
+const slotopolGameIds = new Map();
+const slotopolFreeSpins = new Map();
+let slotopolAdminToken = null;
+let slotopolPlayerToken = null;
+let slotopolSyncedRtp = null;
 
 const pool = mysql.createPool({
   host: process.env.DB_HOST || 'localhost',
@@ -238,6 +251,141 @@ async function getSlotopolStatus() {
   }
 }
 
+async function slotopolRequest(path, { token, body, timeoutMs = 5000 } = {}) {
+  const response = await fetch(`${slotopolUrl.replace(/\/$/, '')}${path}`, {
+    method: body ? 'POST' : 'GET',
+    headers: {
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    },
+    body: body ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(timeoutMs)
+  });
+  const data = response.status === 204 ? null : await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const error = new Error(data?.what || data?.message || 'Slotopol request failed.');
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+
+  return data;
+}
+
+async function getSlotopolToken(kind = 'player') {
+  if (kind === 'admin' && slotopolAdminToken) {
+    return slotopolAdminToken;
+  }
+  if (kind === 'player' && slotopolPlayerToken) {
+    return slotopolPlayerToken;
+  }
+
+  const credentials = kind === 'admin'
+    ? { email: slotopolAdminEmail, secret: slotopolAdminSecret }
+    : { email: slotopolPlayerEmail, secret: slotopolPlayerSecret };
+  const data = await slotopolRequest('/signin', { body: credentials });
+  const token = data.access;
+
+  if (kind === 'admin') {
+    slotopolAdminToken = token;
+  } else {
+    slotopolPlayerToken = token;
+  }
+
+  return token;
+}
+
+async function syncSlotopolRtp(rtpPercent) {
+  const nextRtp = Number(rtpPercent);
+
+  if (slotopolSyncedRtp === nextRtp) {
+    return;
+  }
+
+  const adminToken = await getSlotopolToken('admin');
+  await slotopolRequest('/prop/rtp/set', {
+    token: adminToken,
+    body: { cid: slotopolClubId, uid: slotopolPlayerId, mrtp: nextRtp }
+  });
+  slotopolSyncedRtp = nextRtp;
+}
+
+async function ensureSlotopolLiquidity(minWallet) {
+  const adminToken = await getSlotopolToken('admin');
+  const props = await slotopolRequest('/prop/get', {
+    token: adminToken,
+    body: { cid: slotopolClubId, uid: slotopolPlayerId }
+  });
+
+  if (Number(props.wallet) < minWallet) {
+    await slotopolRequest('/prop/wallet/add', {
+      token: adminToken,
+      body: { cid: slotopolClubId, uid: slotopolPlayerId, sum: minWallet - Number(props.wallet) + 1000 }
+    });
+  }
+
+  await slotopolRequest('/club/cashin', {
+    token: adminToken,
+    body: { cid: slotopolClubId, banksum: 100000, fundsum: 0, locksum: 0 }
+  }).catch(() => null);
+}
+
+async function getSlotopolGame(userId) {
+  const playerToken = await getSlotopolToken('player');
+  const cached = slotopolGameIds.get(userId);
+
+  if (cached) {
+    return { gid: cached, token: playerToken };
+  }
+
+  const data = await slotopolRequest('/game/new', {
+    token: playerToken,
+    body: { cid: slotopolClubId, uid: slotopolPlayerId, alias: slotopolGameAlias }
+  });
+  slotopolGameIds.set(userId, data.gid);
+  return { gid: data.gid, token: playerToken };
+}
+
+function slotopolGridToReels(grid = []) {
+  return grid.map((reel) => reel.map((symbol) => ({
+    id: String(symbol),
+    label: `Symbol ${symbol}`,
+    icon: String(symbol)
+  })));
+}
+
+async function spinSlotopol({ userId, betCents, rtpPercent }) {
+  const totalStake = betCents / 100;
+  const lineBet = totalStake / slotopolLines;
+  const isFreeSpin = Number(slotopolFreeSpins.get(userId) || 0) > 0;
+
+  await syncSlotopolRtp(rtpPercent);
+  await ensureSlotopolLiquidity(Math.max(1000, totalStake * 50));
+
+  let game = await getSlotopolGame(userId);
+  try {
+    const spin = await slotopolRequest('/slot/spin', {
+      token: game.token,
+      body: { gid: game.gid, bet: lineBet },
+      timeoutMs: 8000
+    });
+    slotopolFreeSpins.set(userId, Number(spin.game?.fsr || 0));
+    return { ...spin, paidStakeCents: isFreeSpin ? 0 : betCents };
+  } catch (error) {
+    slotopolGameIds.delete(userId);
+    slotopolFreeSpins.delete(userId);
+    game = await getSlotopolGame(userId);
+    const spin = await slotopolRequest('/slot/spin', {
+      token: game.token,
+      body: { gid: game.gid, bet: lineBet },
+      timeoutMs: 8000
+    });
+    slotopolFreeSpins.set(userId, Number(spin.game?.fsr || 0));
+    return { ...spin, paidStakeCents: betCents };
+  }
+}
+
 app.get('/health', async (_req, res) => {
   res.json({ ok: true, slotopol: await getSlotopolStatus() });
 });
@@ -286,6 +434,7 @@ app.patch('/api/admin/slot-config', requireUser, requireAdmin, async (req, res) 
     `,
     [title, rtpPercent, Math.round(minBet * 100), Math.round(maxBet * 100), enabled ? 1 : 0]
   );
+  await syncSlotopolRtp(rtpPercent);
 
   const config = await getGameConfig();
   res.json({ config: publicGameConfig(config), slotopolStatus: await getSlotopolStatus() });
@@ -346,14 +495,23 @@ app.post('/api/slots/spin', requireUser, async (req, res) => {
       return res.status(400).json({ message: 'Insufficient balance for this spin.' });
     }
 
-    const spin = buildSpin();
-    const outcome = calculateWin(spin, betCents);
-    outcome.winCents = applyRtp(outcome.winCents, config);
-    outcome.winningLines = outcome.winningLines.map((line) => ({
-      ...line,
-      amountCents: applyRtp(line.amountCents, config)
-    }));
-    const balanceAfter = Number(user.balance_cents) - betCents + outcome.winCents;
+    const slotopolSpin = await spinSlotopol({
+      userId: user.id,
+      betCents,
+      rtpPercent: Number(config.rtp_percent)
+    });
+    const slotopolStakeCents = Number(slotopolSpin.paidStakeCents || 0);
+    const winCents = Math.max(0, Math.round(Number(slotopolSpin.game?.gain || 0) * 100));
+    const outcome = {
+      winCents,
+      winningLines: (slotopolSpin.wins || []).map((win) => ({
+        index: win.li || 0,
+        symbol: String(win.sym),
+        multiplier: win.mp || 1,
+        amountCents: Math.round(Number(win.pay || 0) * 100)
+      }))
+    };
+    const balanceAfter = Number(user.balance_cents) - slotopolStakeCents + outcome.winCents;
 
     await connection.execute('UPDATE users SET balance_cents = ? WHERE id = ?', [balanceAfter, user.id]);
     await connection.execute(
@@ -367,7 +525,7 @@ app.post('/api/slots/spin', requireUser, async (req, res) => {
         betCents,
         outcome.winCents,
         balanceAfter,
-        JSON.stringify(spin.reels.map((reel) => reel.map((symbol) => symbol.id)))
+        JSON.stringify(slotopolSpin.game?.grid || [])
       ]
     );
 
@@ -378,9 +536,12 @@ app.post('/api/slots/spin', requireUser, async (req, res) => {
         gameCode: 'ctinteractive/luckydollar',
         betCents,
         winCents: outcome.winCents,
-        netCents: outcome.winCents - betCents,
-        reels: spin.reels.map((reel) => reel.map(({ id, label, icon }) => ({ id, label, icon }))),
+        netCents: outcome.winCents - slotopolStakeCents,
+        reels: slotopolGridToReels(slotopolSpin.game?.grid || []),
         winningLines: outcome.winningLines,
+        slotopolSid: slotopolSpin.sid,
+        slotopolStakeCents,
+        appliedRtpPercent: Number(config.rtp_percent),
         slotopolStatus: await getSlotopolStatus()
       },
       user: publicUser({ ...user, balance_cents: balanceAfter })
