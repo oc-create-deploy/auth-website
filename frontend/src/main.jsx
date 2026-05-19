@@ -401,7 +401,7 @@ function App() {
       <header className="site-header">
         <div className="container header-inner">
           <div className="brand-mark">
-            <img src="/logo.svg" alt="CasUSDT.com" />
+            <img src="/logo.svg?v=20260519" alt="CasUSDT.com" />
             <div>
               <strong>CasUSDT.com</strong>
               <small>Casino USDT</small>
