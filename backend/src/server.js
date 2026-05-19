@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import bcrypt from 'bcryptjs';
 import cors from 'cors';
+import crypto from 'crypto';
 import express from 'express';
 import helmet from 'helmet';
 import jwt from 'jsonwebtoken';
@@ -13,7 +14,11 @@ const defaultCurrency = 'USD';
 
 app.use(helmet());
 app.use(cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:5173' }));
-app.use(express.json());
+app.use(express.json({
+  verify: (req, _res, buffer) => {
+    req.rawBody = buffer;
+  }
+}));
 
 function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase();
@@ -102,6 +107,7 @@ function parseDepositAmount(value) {
 async function createCloakdSession({ amountCents, currency, email, userId }) {
   const baseUrl = process.env.CLOAKD_API_URL;
   const apiKey = process.env.CLOAKD_API_KEY;
+  const publicBaseUrl = (process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || '').replace(/\/$/, '');
 
   if (!baseUrl || !apiKey) {
     return {
@@ -112,18 +118,29 @@ async function createCloakdSession({ amountCents, currency, email, userId }) {
     };
   }
 
-  const response = await fetch(`${baseUrl.replace(/\/$/, '')}/payment-links`, {
+  const orderId = `deposit-${userId}-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
+  const response = await fetch(`${baseUrl.replace(/\/$/, '')}/payment`, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${apiKey}`,
+      'X-API-Key': apiKey,
+      'Idempotency-Key': orderId,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      amount: amountCents / 100,
-      amountCents,
-      currency,
-      customerEmail: email,
-      metadata: { userId }
+      pay_amount: (amountCents / 100).toFixed(2),
+      pay_currency: currency,
+      order_id: orderId,
+      order_description: 'Cashier deposit',
+      callback_url: publicBaseUrl ? `${publicBaseUrl}/api/webhooks/cloakd` : undefined,
+      success_url: publicBaseUrl ? `${publicBaseUrl}/?deposit=success` : undefined,
+      cancel_url: publicBaseUrl ? `${publicBaseUrl}/?deposit=cancelled` : undefined,
+      expiration_minutes: 60,
+      customer_email: email,
+      metadata: {
+        userId,
+        amountCents,
+        currency
+      }
     })
   });
   const data = await response.json().catch(() => ({}));
@@ -134,10 +151,187 @@ async function createCloakdSession({ amountCents, currency, email, userId }) {
 
   return {
     provider: 'cloakd',
-    reference: String(data.id || data.reference || data.paymentId || ''),
-    checkoutUrl: data.checkoutUrl || data.checkout_url || data.paymentUrl || data.url || null,
+    reference: String(data.id || data.reference || data.paymentId || data.payment_id || data.order_id || orderId),
+    checkoutUrl: data.checkout_url || data.checkoutUrl || data.paymentUrl || data.url || null,
     status: 'pending'
   };
+}
+
+function timingSafeEqualString(left, right) {
+  const leftBuffer = Buffer.from(String(left));
+  const rightBuffer = Buffer.from(String(right));
+
+  return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function hmacHex(secret, payload) {
+  return crypto.createHmac('sha256', secret).update(payload).digest('hex');
+}
+
+function hmacBase64(secret, payload) {
+  return crypto.createHmac('sha256', secret).update(payload).digest('base64');
+}
+
+function parseStripeSignature(signatureHeader = '') {
+  return Object.fromEntries(
+    signatureHeader.split(',').map((part) => {
+      const [key, ...value] = part.split('=');
+      return [key, value.join('=')];
+    })
+  );
+}
+
+function verifyCloakdWebhook(req) {
+  const secret = process.env.CLOAKD_WEBHOOK_SECRET;
+
+  if (!secret) {
+    return true;
+  }
+
+  const rawBody = req.rawBody || Buffer.from(JSON.stringify(req.body || {}));
+  const body = rawBody.toString('utf8');
+  const stripeSignature = req.get('stripe-signature');
+  const cloakdSignature = req.get('cloakd-signature') || req.get('x-cloakd-signature') || req.get('x-webhook-signature');
+  const cloakdTimestamp = req.get('cloakd-timestamp') || req.get('x-cloakd-timestamp') || req.get('x-webhook-timestamp');
+  const webhookId = req.get('webhook-id') || req.get('svix-id');
+  const webhookTimestamp = req.get('webhook-timestamp') || req.get('svix-timestamp');
+  const webhookSignature = req.get('webhook-signature') || req.get('svix-signature');
+
+  if (stripeSignature) {
+    const parsed = parseStripeSignature(stripeSignature);
+    const expected = hmacHex(secret, `${parsed.t}.${body}`);
+    return Boolean(parsed.t && parsed.v1 && timingSafeEqualString(parsed.v1, expected));
+  }
+
+  if (cloakdSignature) {
+    const payload = cloakdTimestamp ? `${cloakdTimestamp}.${body}` : body;
+    const expected = hmacHex(secret, payload);
+    return timingSafeEqualString(cloakdSignature, expected);
+  }
+
+  if (webhookId && webhookTimestamp && webhookSignature) {
+    const signedContent = `${webhookId}.${webhookTimestamp}.${body}`;
+    const candidates = [secret];
+
+    if (secret.startsWith('whsec_')) {
+      candidates.push(Buffer.from(secret.slice(6), 'base64'));
+    }
+
+    return webhookSignature
+      .split(' ')
+      .flatMap((signature) => signature.split(','))
+      .some((signature) => {
+        const value = signature.replace(/^v\d+,/, '').replace(/^v\d+=/, '');
+        return candidates.some((candidate) => timingSafeEqualString(value, hmacBase64(candidate, signedContent)));
+      });
+  }
+
+  return false;
+}
+
+function findFirstValue(source, keys) {
+  if (!source || typeof source !== 'object') {
+    return undefined;
+  }
+
+  for (const key of keys) {
+    if (source[key] !== undefined && source[key] !== null) {
+      return source[key];
+    }
+  }
+
+  return undefined;
+}
+
+function extractCloakdEvent(payload) {
+  const data = payload.data || payload.object || payload.payment || payload.paymentLink || payload;
+  const metadata = data.metadata || payload.metadata || {};
+  const reference = String(findFirstValue(data, [
+    'id',
+    'reference',
+    'paymentId',
+    'payment_id',
+    'paymentLinkId',
+    'payment_link_id',
+    'token_id',
+    'order_id',
+    'orderId',
+    'checkoutId',
+    'checkout_id'
+  ]) || findFirstValue(payload, ['id', 'reference']) || '');
+  const amount = findFirstValue(data, ['amountCents', 'amount_cents'])
+    || (Number(findFirstValue(data, ['pay_amount', 'amount', 'total'])) * 100);
+  const status = String(
+    findFirstValue(data, ['status', 'paymentStatus', 'payment_status'])
+      || findFirstValue(payload, ['status', 'type', 'event'])
+      || ''
+  ).toLowerCase();
+
+  return {
+    reference,
+    status,
+    amountCents: Number.isFinite(Number(amount)) ? Math.round(Number(amount)) : null,
+    currency: String(findFirstValue(data, ['currency', 'pay_currency']) || metadata.currency || defaultCurrency).toUpperCase(),
+    userId: Number(metadata.userId || metadata.user_id || data.userId || data.user_id || 0) || null
+  };
+}
+
+function isPaidCloakdStatus(status) {
+  return ['paid', 'succeeded', 'success', 'confirmed', 'complete', 'completed', 'settled', 'payment.succeeded', 'payment.paid', 'payment.settled'].includes(status);
+}
+
+function isFailedCloakdStatus(status) {
+  return ['failed', 'cancelled', 'canceled', 'expired', 'payment.failed', 'payment.cancelled'].includes(status);
+}
+
+async function applyConfirmedDeposit({ reference, amountCents, currency, userId }) {
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+    const [rows] = await connection.execute(
+      'SELECT id, user_id, amount_cents, currency, status FROM deposits WHERE provider = ? AND provider_reference = ? LIMIT 1 FOR UPDATE',
+      ['cloakd', reference]
+    );
+    let deposit = rows[0];
+
+    if (!deposit) {
+      if (!userId || !amountCents) {
+        throw new Error('Webhook did not match an existing deposit and lacked user metadata.');
+      }
+
+      const [result] = await connection.execute(
+        `
+          INSERT INTO deposits (user_id, amount_cents, currency, provider, provider_reference, status)
+          VALUES (?, ?, ?, 'cloakd', ?, 'pending')
+        `,
+        [userId, amountCents, currency, reference]
+      );
+      deposit = {
+        id: result.insertId,
+        user_id: userId,
+        amount_cents: amountCents,
+        currency,
+        status: 'pending'
+      };
+    }
+
+    if (deposit.status !== 'confirmed') {
+      await connection.execute(
+        'UPDATE users SET balance_cents = balance_cents + ? WHERE id = ?',
+        [deposit.amount_cents, deposit.user_id]
+      );
+      await connection.execute('UPDATE deposits SET status = ? WHERE id = ?', ['confirmed', deposit.id]);
+    }
+
+    await connection.commit();
+    return { credited: deposit.status !== 'confirmed', depositId: deposit.id };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 }
 
 async function ensureAdminUser() {
@@ -407,6 +601,37 @@ app.post('/api/deposits', requireUser, async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(502).json({ message: error.message || 'Deposit provider is unavailable.' });
+  }
+});
+
+app.post('/api/webhooks/cloakd', async (req, res) => {
+  if (!verifyCloakdWebhook(req)) {
+    return res.status(400).json({ message: 'Invalid webhook signature.' });
+  }
+
+  const event = extractCloakdEvent(req.body || {});
+
+  if (!event.reference) {
+    return res.status(400).json({ message: 'Webhook is missing payment reference.' });
+  }
+
+  try {
+    if (isPaidCloakdStatus(event.status)) {
+      const result = await applyConfirmedDeposit(event);
+      return res.json({ received: true, credited: result.credited, depositId: result.depositId });
+    }
+
+    if (isFailedCloakdStatus(event.status)) {
+      await pool.execute(
+        'UPDATE deposits SET status = ? WHERE provider = ? AND provider_reference = ? AND status <> ?',
+        [event.status, 'cloakd', event.reference, 'confirmed']
+      );
+    }
+
+    res.json({ received: true, credited: false });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Could not process Cloakd webhook.' });
   }
 });
 

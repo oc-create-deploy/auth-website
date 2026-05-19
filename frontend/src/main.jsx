@@ -463,7 +463,7 @@ function App() {
                   <div>
                     <span className="eyebrow compact">Cashier</span>
                     <h2>Deposit funds</h2>
-                    <p className="text-secondary mb-0">Demo deposits settle instantly. Add Cloakd API credentials to issue live checkout links.</p>
+                    <p className="text-secondary mb-0">Live Cloakd checkout opens after deposit request. Balance updates after payment confirmation.</p>
                   </div>
                   <div className="vault-balance">
                     <span>Available</span>
