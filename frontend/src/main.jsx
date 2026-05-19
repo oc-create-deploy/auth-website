@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './styles.css';
 
-const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const apiUrl = import.meta.env.VITE_API_URL || '';
 
 function App() {
   const [mode, setMode] = useState('login');
@@ -176,4 +176,3 @@ function App() {
 }
 
 createRoot(document.getElementById('root')).render(<App />);
-

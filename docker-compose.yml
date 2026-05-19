@@ -39,8 +39,6 @@ services:
   frontend:
     build:
       context: ./frontend
-      args:
-        VITE_API_URL: http://localhost:3000
     restart: unless-stopped
     ports:
       - "5173:80"
@@ -49,4 +47,3 @@ services:
 
 volumes:
   mysql-data:
-
