@@ -12,7 +12,7 @@ const defaultReels = [
   [{ icon: 'Q' }, { icon: 'BAR' }, { icon: 'A' }],
   [{ icon: '7' }, { icon: '$' }, { icon: 'BONUS' }]
 ];
-const spinAnimationMs = 1800;
+const spinAnimationMs = 2300;
 
 function formatMoney(cents = 0) {
   return new Intl.NumberFormat('en-US', {
@@ -47,7 +47,7 @@ function randomSlotSymbol() {
 }
 
 function buildAnimatedReels() {
-  return Array.from({ length: 5 }, () => Array.from({ length: 12 }, randomSlotSymbol));
+  return Array.from({ length: 5 }, () => Array.from({ length: 18 }, randomSlotSymbol));
 }
 
 function App() {
@@ -602,11 +602,16 @@ function App() {
                         <div
                           className={`slot-reel ${spinning ? 'is-spinning' : ''}`}
                           key={reelIndex}
-                          style={spinning ? { '--spin-delay': `${reelIndex * 110}ms` } : undefined}
+                          style={spinning ? {
+                            '--spin-offset': `-${reelIndex * 140}ms`,
+                            '--spin-duration': `${520 + reelIndex * 45}ms`
+                          } : undefined}
                         >
-                          {reel.map((symbol, rowIndex) => (
-                            <span key={`${reelIndex}-${rowIndex}-${symbol.icon}`}>{slotSymbolIcon(symbol)}</span>
-                          ))}
+                          <div className="slot-reel-strip">
+                            {reel.map((symbol, rowIndex) => (
+                              <span key={`${reelIndex}-${rowIndex}-${symbol.icon}`}>{slotSymbolIcon(symbol)}</span>
+                            ))}
+                          </div>
                         </div>
                       ))}
                     </div>
