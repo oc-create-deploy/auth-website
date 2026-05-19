@@ -40,6 +40,82 @@ body {
   z-index: 1;
 }
 
+.site-header {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 5;
+  border-bottom: 1px solid rgba(216, 180, 106, 0.18);
+  background: rgba(5, 7, 12, 0.78);
+  backdrop-filter: blur(18px);
+}
+
+.header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 76px;
+}
+
+.brand-mark,
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.brand-mark > span {
+  display: inline-grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(216, 180, 106, 0.42);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 25%, #f3dda0, #8b681e);
+  color: #110d08;
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 700;
+}
+
+.brand-mark strong,
+.brand-mark small,
+.balance-pill span,
+.balance-pill strong,
+.vault-balance span,
+.vault-balance strong {
+  display: block;
+}
+
+.brand-mark strong {
+  color: #fff7e8;
+  line-height: 1.1;
+}
+
+.brand-mark small {
+  color: rgba(255, 247, 232, 0.58);
+  font-size: 0.78rem;
+}
+
+.balance-pill {
+  min-width: 132px;
+  border: 1px solid rgba(216, 180, 106, 0.28);
+  border-radius: 8px;
+  padding: 0.45rem 0.7rem;
+  background: rgba(216, 180, 106, 0.08);
+}
+
+.balance-pill span {
+  color: rgba(255, 247, 232, 0.58);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+}
+
+.balance-pill strong {
+  color: #f6d98f;
+}
+
 .intro {
   color: #fff7e8;
 }
@@ -57,6 +133,12 @@ body {
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
+}
+
+.eyebrow.compact {
+  min-height: 1.7rem;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.68rem;
 }
 
 .intro h1 {
@@ -111,6 +193,107 @@ body {
   padding: clamp(1.25rem, 4vw, 2rem);
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(18px);
+}
+
+.cashier-card {
+  width: min(100%, 620px);
+}
+
+.cashier-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.75rem;
+}
+
+.cashier-head h2 {
+  margin-top: 0.75rem;
+}
+
+.vault-balance {
+  min-width: 150px;
+  align-self: flex-start;
+  border: 1px solid rgba(216, 180, 106, 0.28);
+  border-radius: 8px;
+  padding: 1rem;
+  background: linear-gradient(145deg, rgba(216, 180, 106, 0.16), rgba(255, 255, 255, 0.04));
+  text-align: right;
+}
+
+.vault-balance span {
+  color: rgba(255, 247, 232, 0.6);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+
+.vault-balance strong {
+  color: #f6d98f;
+  font-size: 1.45rem;
+}
+
+.deposit-form {
+  margin-top: 1.5rem;
+}
+
+.deposit-control {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.deposit-control > span {
+  display: inline-grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border: 1px solid rgba(216, 180, 106, 0.28);
+  border-radius: 8px;
+  color: #f6d98f;
+  background: rgba(216, 180, 106, 0.08);
+  font-weight: 700;
+}
+
+.quick-amounts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0 1.5rem;
+}
+
+.deposit-history {
+  border-top: 1px solid rgba(216, 180, 106, 0.18);
+  padding-top: 1.25rem;
+}
+
+.deposit-history h3 {
+  color: #fff7e8;
+  font-size: 1rem;
+  margin-bottom: 0.9rem;
+}
+
+.deposit-history ul {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.deposit-history li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 1px solid rgba(216, 180, 106, 0.18);
+  border-radius: 8px;
+  padding: 0.8rem;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.deposit-history small {
+  display: block;
+  color: rgba(255, 247, 232, 0.58);
+  margin-top: 0.15rem;
 }
 
 .auth-card h2 {
@@ -225,6 +408,22 @@ body {
 }
 
 @media (max-width: 575.98px) {
+  .header-inner {
+    align-items: flex-start;
+    flex-direction: column;
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+  }
+
+  .header-actions {
+    width: 100%;
+  }
+
+  .header-actions .btn,
+  .balance-pill {
+    flex: 1;
+  }
+
   .status-grid {
     grid-template-columns: 1fr;
   }
@@ -243,5 +442,26 @@ body {
 
   .account-line {
     display: block;
+  }
+
+  .cashier-head,
+  .deposit-control {
+    display: block;
+  }
+
+  .vault-balance {
+    margin-top: 1rem;
+    text-align: left;
+  }
+
+  .deposit-control > span,
+  .deposit-control .form-control,
+  .deposit-control .btn {
+    width: 100%;
+    margin-bottom: 0.75rem;
+  }
+
+  .quick-amounts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
