@@ -71,7 +71,7 @@ function App() {
   const emailInputRef = useRef(null);
 
   const token = localStorage.getItem('authToken');
-  const title = mode === 'login' ? 'Access account' : 'Request membership';
+  const title = mode === 'login' ? 'Login' : 'Registration';
   const submitLabel = mode === 'login' ? 'Sign in' : 'Register';
   const selectedAdminUser = adminUsers.find((item) => String(item.id) === selectedAdminUserId);
   const games = [
@@ -837,7 +837,6 @@ function App() {
             <div className="auth-card shadow-lg">
               <div className="mb-4">
                 <h2>{title}</h2>
-                <p className="text-secondary mb-0">Use the header to switch between login and registration.</p>
               </div>
 
               <form onSubmit={submit}>
