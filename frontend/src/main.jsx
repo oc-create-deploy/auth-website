@@ -13,6 +13,38 @@ const defaultReels = [
   [{ icon: '7' }, { icon: '$' }, { icon: 'BONUS' }]
 ];
 const spinAnimationMs = 2400;
+const paylinePatterns = [
+  [1, 1, 1, 1, 1],
+  [0, 0, 0, 0, 0],
+  [2, 2, 2, 2, 2],
+  [0, 1, 2, 1, 0],
+  [2, 1, 0, 1, 2],
+  [0, 0, 1, 2, 2],
+  [2, 2, 1, 0, 0],
+  [1, 0, 0, 0, 1],
+  [1, 2, 2, 2, 1],
+  [0, 1, 1, 1, 0],
+  [2, 1, 1, 1, 2],
+  [1, 0, 1, 2, 1],
+  [1, 2, 1, 0, 1],
+  [0, 1, 0, 1, 0],
+  [2, 1, 2, 1, 2],
+  [1, 1, 0, 1, 1],
+  [1, 1, 2, 1, 1],
+  [0, 0, 2, 0, 0],
+  [2, 2, 0, 2, 2],
+  [0, 2, 0, 2, 0],
+  [2, 0, 2, 0, 2],
+  [1, 0, 2, 0, 1],
+  [1, 2, 0, 2, 1],
+  [0, 2, 2, 2, 0],
+  [2, 0, 0, 0, 2],
+  [0, 1, 2, 2, 2],
+  [2, 1, 0, 0, 0],
+  [0, 0, 0, 1, 2],
+  [2, 2, 2, 1, 0],
+  [1, 0, 1, 0, 1]
+];
 
 function formatMoney(cents = 0) {
   return new Intl.NumberFormat('en-US', {
@@ -57,8 +89,26 @@ function buildSettlingReels(finalReels) {
   ]);
 }
 
+function winningLineNumber(line) {
+  const rawIndex = Number(line.index || 0);
+  return rawIndex > 0 ? rawIndex : rawIndex + 1;
+}
+
+function linePattern(line) {
+  return paylinePatterns[(winningLineNumber(line) - 1) % paylinePatterns.length];
+}
+
+function linePoints(line) {
+  const xPositions = [10, 30, 50, 70, 90];
+  const yPositions = [17, 50, 83];
+
+  return linePattern(line)
+    .map((rowIndex, reelIndex) => `${xPositions[reelIndex]},${yPositions[rowIndex]}`)
+    .join(' ');
+}
+
 function formatWinningLine(line) {
-  return `Line ${Number(line.index || 0) + 1}: ${formatMoney(line.amountCents)}`;
+  return `Line ${winningLineNumber(line)}: ${formatMoney(line.amountCents)}`;
 }
 
 function App() {
@@ -630,6 +680,16 @@ function App() {
                           </div>
                         </div>
                       ))}
+                      {!spinning && slotResult?.winningLines?.length > 0 && (
+                        <svg className="slot-line-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                          {slotResult.winningLines.map((line, index) => (
+                            <g key={`${line.index}-${index}`} className="slot-line-group">
+                              <polyline points={linePoints(line)} />
+                              <text x="4" y={6 + index * 9}>{winningLineNumber(line)}</text>
+                            </g>
+                          ))}
+                        </svg>
+                      )}
                     </div>
                   </div>
 

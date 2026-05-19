@@ -454,9 +454,38 @@ body {
 }
 
 .slot-machine {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.45rem;
+}
+
+.slot-line-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.slot-line-group polyline {
+  fill: none;
+  stroke: #ffef9f;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.45;
+  filter: drop-shadow(0 0 2px rgba(239, 50, 38, 0.95)) drop-shadow(0 0 8px rgba(246, 217, 143, 0.75));
+  vector-effect: non-scaling-stroke;
+}
+
+.slot-line-group text {
+  fill: #1b1007;
+  stroke: rgba(255, 239, 159, 0.95);
+  stroke-width: 0.35;
+  paint-order: stroke;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 6px;
+  font-weight: 900;
 }
 
 .slot-reel {
