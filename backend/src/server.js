@@ -32,14 +32,22 @@ function validateCredentials(email, password) {
 }
 
 function signToken(user) {
-  return jwt.sign({ sub: user.id, email: user.email }, jwtSecret, { expiresIn: '2h' });
+  return jwt.sign(
+    { sub: user.id, email: user.email, isAdmin: Boolean(user.is_admin || user.isAdmin) },
+    jwtSecret,
+    { expiresIn: '2h' }
+  );
 }
 
 function publicUser(user) {
   return {
     id: user.id,
     email: user.email,
-    balanceCents: Number(user.balance_cents || user.balanceCents || 0)
+    balanceCents: Number(user.balance_cents || user.balanceCents || 0),
+    isAdmin: Boolean(user.is_admin || user.isAdmin),
+    fullName: user.full_name || user.fullName || '',
+    status: user.status || 'active',
+    createdAt: user.created_at || user.createdAt
   };
 }
 
@@ -54,7 +62,7 @@ async function requireUser(req, res, next) {
   try {
     const payload = jwt.verify(token, jwtSecret);
     const [rows] = await pool.execute(
-      'SELECT id, email, balance_cents FROM users WHERE id = ? LIMIT 1',
+      'SELECT id, email, balance_cents, is_admin, full_name, status, created_at FROM users WHERE id = ? LIMIT 1',
       [payload.sub]
     );
 
@@ -62,11 +70,23 @@ async function requireUser(req, res, next) {
       return res.status(401).json({ message: 'User no longer exists.' });
     }
 
+    if (rows[0].status !== 'active') {
+      return res.status(403).json({ message: 'Account is not active.' });
+    }
+
     req.user = rows[0];
     next();
   } catch (_error) {
     res.status(401).json({ message: 'Invalid or expired session.' });
   }
+}
+
+function requireAdmin(req, res, next) {
+  if (!req.user?.is_admin) {
+    return res.status(403).json({ message: 'Admin access required.' });
+  }
+
+  next();
 }
 
 function parseDepositAmount(value) {
@@ -120,6 +140,28 @@ async function createCloakdSession({ amountCents, currency, email, userId }) {
   };
 }
 
+async function ensureAdminUser() {
+  const adminEmail = normalizeEmail(process.env.ADMIN_EMAIL || 'admin@casusdt.com');
+  const adminPassword = process.env.ADMIN_PASSWORD;
+
+  if (!adminPassword) {
+    return;
+  }
+
+  const passwordHash = await bcrypt.hash(adminPassword, 12);
+  await pool.execute(
+    `
+      INSERT INTO users (email, password_hash, is_admin, full_name, status)
+      VALUES (?, ?, TRUE, 'Site Administrator', 'active')
+      ON DUPLICATE KEY UPDATE
+        password_hash = VALUES(password_hash),
+        is_admin = TRUE,
+        status = 'active'
+    `,
+    [adminEmail, passwordHash]
+  );
+}
+
 app.get('/health', (_req, res) => {
   res.json({ ok: true });
 });
@@ -140,7 +182,7 @@ app.post('/api/register', async (req, res) => {
       'INSERT INTO users (email, password_hash) VALUES (?, ?)',
       [email, passwordHash]
     );
-    const user = { id: result.insertId, email, balance_cents: 0 };
+    const user = { id: result.insertId, email, balance_cents: 0, is_admin: false, status: 'active' };
 
     res.status(201).json({
       token: signToken(user),
@@ -165,7 +207,7 @@ app.post('/api/login', async (req, res) => {
   }
 
   const [rows] = await pool.execute(
-    'SELECT id, email, password_hash, balance_cents FROM users WHERE email = ? LIMIT 1',
+    'SELECT id, email, password_hash, balance_cents, is_admin, full_name, status, created_at FROM users WHERE email = ? LIMIT 1',
     [email]
   );
 
@@ -176,6 +218,10 @@ app.post('/api/login', async (req, res) => {
     return res.status(401).json({ message: 'Invalid email or password.' });
   }
 
+  if (user.status !== 'active') {
+    return res.status(403).json({ message: 'Account is not active.' });
+  }
+
   res.json({
     token: signToken(user),
     user: publicUser(user)
@@ -184,6 +230,104 @@ app.post('/api/login', async (req, res) => {
 
 app.get('/api/me', requireUser, (req, res) => {
   res.json({ user: publicUser(req.user) });
+});
+
+app.get('/api/admin/users', requireUser, requireAdmin, async (_req, res) => {
+  const [rows] = await pool.execute(
+    `
+      SELECT id, email, balance_cents, is_admin, full_name, status, created_at
+      FROM users
+      ORDER BY id DESC
+      LIMIT 200
+    `
+  );
+
+  res.json({ users: rows.map(publicUser) });
+});
+
+app.patch('/api/admin/users/:id', requireUser, requireAdmin, async (req, res) => {
+  const userId = Number(req.params.id);
+  const email = req.body.email === undefined ? undefined : normalizeEmail(req.body.email);
+  const fullName = req.body.fullName === undefined ? undefined : String(req.body.fullName || '').trim();
+  const status = req.body.status === undefined ? undefined : String(req.body.status || '').trim();
+  const isAdmin = req.body.isAdmin === undefined ? undefined : Boolean(req.body.isAdmin);
+  const balance = req.body.balance === undefined ? undefined : Number(req.body.balance);
+  const password = req.body.password === undefined ? undefined : String(req.body.password || '');
+
+  if (!Number.isInteger(userId) || userId < 1) {
+    return res.status(400).json({ message: 'Invalid user id.' });
+  }
+
+  if (email !== undefined && !/^\S+@\S+\.\S+$/.test(email)) {
+    return res.status(400).json({ message: 'Enter a valid email address.' });
+  }
+
+  if (status !== undefined && !['active', 'suspended'].includes(status)) {
+    return res.status(400).json({ message: 'Status must be active or suspended.' });
+  }
+
+  if (balance !== undefined && (!Number.isFinite(balance) || balance < 0 || balance > 100000000)) {
+    return res.status(400).json({ message: 'Balance must be from 0 to 100,000,000.' });
+  }
+
+  if (password && password.length < 8) {
+    return res.status(400).json({ message: 'Password must be at least 8 characters.' });
+  }
+
+  const fields = [];
+  const values = [];
+
+  if (email !== undefined) {
+    fields.push('email = ?');
+    values.push(email);
+  }
+  if (fullName !== undefined) {
+    fields.push('full_name = ?');
+    values.push(fullName || null);
+  }
+  if (status !== undefined) {
+    fields.push('status = ?');
+    values.push(status);
+  }
+  if (isAdmin !== undefined) {
+    fields.push('is_admin = ?');
+    values.push(isAdmin ? 1 : 0);
+  }
+  if (balance !== undefined) {
+    fields.push('balance_cents = ?');
+    values.push(Math.round(balance * 100));
+  }
+  if (password) {
+    fields.push('password_hash = ?');
+    values.push(await bcrypt.hash(password, 12));
+  }
+
+  if (fields.length === 0) {
+    return res.status(400).json({ message: 'No changes provided.' });
+  }
+
+  values.push(userId);
+
+  try {
+    const [result] = await pool.execute(`UPDATE users SET ${fields.join(', ')} WHERE id = ?`, values);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    const [rows] = await pool.execute(
+      'SELECT id, email, balance_cents, is_admin, full_name, status, created_at FROM users WHERE id = ? LIMIT 1',
+      [userId]
+    );
+    res.json({ user: publicUser(rows[0]) });
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ message: 'An account with this email already exists.' });
+    }
+
+    console.error(error);
+    res.status(500).json({ message: 'Could not update user.' });
+  }
 });
 
 app.get('/api/deposits', requireUser, async (req, res) => {
@@ -272,6 +416,7 @@ app.use((error, _req, res, _next) => {
 });
 
 await initializeDatabase();
+await ensureAdminUser();
 
 app.listen(port, () => {
   console.log(`Auth API listening on port ${port}`);

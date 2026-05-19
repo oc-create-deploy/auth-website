@@ -20,6 +20,9 @@ export async function initializeDatabase() {
       email VARCHAR(255) NOT NULL UNIQUE,
       password_hash VARCHAR(255) NOT NULL,
       balance_cents INT NOT NULL DEFAULT 0,
+      is_admin BOOLEAN NOT NULL DEFAULT FALSE,
+      full_name VARCHAR(160),
+      status VARCHAR(32) NOT NULL DEFAULT 'active',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
@@ -40,6 +43,9 @@ export async function initializeDatabase() {
   `);
 
   await ensureColumn('users', 'balance_cents', 'balance_cents INT NOT NULL DEFAULT 0');
+  await ensureColumn('users', 'is_admin', 'is_admin BOOLEAN NOT NULL DEFAULT FALSE');
+  await ensureColumn('users', 'full_name', 'full_name VARCHAR(160)');
+  await ensureColumn('users', 'status', "status VARCHAR(32) NOT NULL DEFAULT 'active'");
 }
 
 async function ensureColumn(table, column, definition) {

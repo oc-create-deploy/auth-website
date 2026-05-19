@@ -24,14 +24,34 @@ function App() {
   const [slotHistory, setSlotHistory] = useState([]);
   const [slotBet, setSlotBet] = useState('25');
   const [slotResult, setSlotResult] = useState(null);
+  const [adminUsers, setAdminUsers] = useState([]);
+  const [selectedAdminUserId, setSelectedAdminUserId] = useState('');
+  const [adminUserForm, setAdminUserForm] = useState({
+    email: '',
+    fullName: '',
+    balance: '',
+    status: 'active',
+    isAdmin: false,
+    password: ''
+  });
+  const [slotConfig, setSlotConfig] = useState(null);
+  const [slotConfigForm, setSlotConfigForm] = useState({
+    title: '',
+    rtpPercent: '96',
+    minBet: '1',
+    maxBet: '1000',
+    enabled: true
+  });
   const [loading, setLoading] = useState(false);
   const [depositing, setDepositing] = useState(false);
   const [spinning, setSpinning] = useState(false);
+  const [adminSaving, setAdminSaving] = useState(false);
   const emailInputRef = useRef(null);
 
   const token = localStorage.getItem('authToken');
   const title = mode === 'login' ? 'Access account' : 'Request membership';
   const submitLabel = mode === 'login' ? 'Sign in' : 'Register';
+  const selectedAdminUser = adminUsers.find((item) => String(item.id) === selectedAdminUserId);
 
   const passwordHint = useMemo(() => {
     if (mode === 'login') {
@@ -53,6 +73,9 @@ function App() {
         await loadDeposits();
         await loadSlotSession();
         await loadSlotHistory();
+        if (response.user?.isAdmin) {
+          await loadAdminData();
+        }
       } catch (_error) {
         localStorage.removeItem('authToken');
       }
@@ -115,6 +138,108 @@ function App() {
     setSlotHistory(data.spins || []);
   }
 
+  async function loadAdminData() {
+    const [usersData, slotConfigData] = await Promise.all([
+      apiRequest('/api/admin/users'),
+      slotRequest('/admin/slot-config')
+    ]);
+
+    setAdminUsers(usersData.users || []);
+    setSlotConfig(slotConfigData.config);
+    setSlotConfigForm({
+      title: slotConfigData.config?.title || 'Lucky Dollar',
+      rtpPercent: String(slotConfigData.config?.rtpPercent ?? 96),
+      minBet: String(slotConfigData.config?.minBet ?? 1),
+      maxBet: String(slotConfigData.config?.maxBet ?? 1000),
+      enabled: Boolean(slotConfigData.config?.enabled)
+    });
+
+    const firstUser = usersData.users?.[0];
+    if (firstUser) {
+      selectAdminUser(firstUser);
+    }
+  }
+
+  function selectAdminUser(nextUser) {
+    setSelectedAdminUserId(String(nextUser.id));
+    setAdminUserForm({
+      email: nextUser.email || '',
+      fullName: nextUser.fullName || '',
+      balance: String(Number(nextUser.balanceCents || 0) / 100),
+      status: nextUser.status || 'active',
+      isAdmin: Boolean(nextUser.isAdmin),
+      password: ''
+    });
+  }
+
+  async function saveAdminUser(event) {
+    event.preventDefault();
+    if (!selectedAdminUserId) {
+      return;
+    }
+
+    setAdminSaving(true);
+    setMessage('');
+
+    try {
+      const payload = {
+        email: adminUserForm.email,
+        fullName: adminUserForm.fullName,
+        balance: adminUserForm.balance,
+        status: adminUserForm.status,
+        isAdmin: adminUserForm.isAdmin
+      };
+
+      if (adminUserForm.password) {
+        payload.password = adminUserForm.password;
+      }
+
+      const data = await apiRequest(`/api/admin/users/${selectedAdminUserId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload)
+      });
+
+      setAdminUsers((current) => current.map((item) => (item.id === data.user.id ? data.user : item)));
+      selectAdminUser(data.user);
+      if (user?.id === data.user.id) {
+        setUser(data.user);
+      }
+      setMessage('User details saved.');
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setAdminSaving(false);
+    }
+  }
+
+  async function saveSlotConfig(event) {
+    event.preventDefault();
+    setAdminSaving(true);
+    setMessage('');
+
+    try {
+      const data = await slotRequest('/admin/slot-config', {
+        method: 'PATCH',
+        body: JSON.stringify(slotConfigForm)
+      });
+
+      setSlotConfig(data.config);
+      setSlotSession((current) => current ? {
+        ...current,
+        title: data.config.title,
+        minBet: data.config.minBet,
+        maxBet: data.config.maxBet,
+        enabled: data.config.enabled,
+        slotopolStatus: data.slotopolStatus
+      } : current);
+      setMessage('Slot configuration saved.');
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setAdminSaving(false);
+    }
+  }
+
   async function submit(event) {
     event.preventDefault();
     setLoading(true);
@@ -133,6 +258,9 @@ function App() {
       await loadDeposits();
       await loadSlotSession();
       await loadSlotHistory();
+      if (data.user?.isAdmin) {
+        await loadAdminData();
+      }
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -210,6 +338,9 @@ function App() {
     setSlotSession(null);
     setSlotHistory([]);
     setSlotResult(null);
+    setAdminUsers([]);
+    setSelectedAdminUserId('');
+    setSlotConfig(null);
     setPassword('');
     setMessage('Signed out.');
   }
@@ -233,6 +364,11 @@ function App() {
                   <span>Balance</span>
                   <strong>{formatMoney(user.balanceCents)}</strong>
                 </div>
+                {user.isAdmin && (
+                  <div className="admin-pill">
+                    <span>Admin</span>
+                  </div>
+                )}
                 <button type="button" className="btn btn-outline-primary btn-sm" onClick={logout}>
                   Sign out
                 </button>
@@ -409,6 +545,195 @@ function App() {
                   )}
                 </div>
               </div>
+
+              {user.isAdmin && (
+                <div className="auth-card admin-card shadow-lg">
+                  <div className="cashier-head">
+                    <div>
+                      <span className="eyebrow compact">Admin panel</span>
+                      <h2>Operations control</h2>
+                      <p className="text-secondary mb-0">Visible only to admin users. Manage accounts, balances, and slot configuration.</p>
+                    </div>
+                    <button type="button" className="btn btn-outline-primary btn-sm" onClick={loadAdminData}>
+                      Refresh
+                    </button>
+                  </div>
+
+                  <div className="admin-grid">
+                    <div className="admin-list">
+                      <h3>Users</h3>
+                      <div className="admin-user-list">
+                        {adminUsers.map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            className={String(item.id) === selectedAdminUserId ? 'active' : ''}
+                            onClick={() => selectAdminUser(item)}
+                          >
+                            <span>
+                              <strong>{item.email}</strong>
+                              <small>{item.isAdmin ? 'Admin' : 'User'} · {item.status}</small>
+                            </span>
+                            <span>{formatMoney(item.balanceCents)}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <form className="admin-editor" onSubmit={saveAdminUser}>
+                      <h3>{selectedAdminUser ? 'User details' : 'Select a user'}</h3>
+                      <div className="row g-3">
+                        <div className="col-md-6">
+                          <label className="form-label" htmlFor="adminEmail">Email</label>
+                          <input
+                            id="adminEmail"
+                            className="form-control"
+                            type="email"
+                            value={adminUserForm.email}
+                            onChange={(event) => setAdminUserForm((current) => ({ ...current, email: event.target.value }))}
+                            disabled={!selectedAdminUser}
+                            required
+                          />
+                        </div>
+                        <div className="col-md-6">
+                          <label className="form-label" htmlFor="adminFullName">Full name</label>
+                          <input
+                            id="adminFullName"
+                            className="form-control"
+                            value={adminUserForm.fullName}
+                            onChange={(event) => setAdminUserForm((current) => ({ ...current, fullName: event.target.value }))}
+                            disabled={!selectedAdminUser}
+                          />
+                        </div>
+                        <div className="col-md-4">
+                          <label className="form-label" htmlFor="adminBalance">Balance</label>
+                          <input
+                            id="adminBalance"
+                            className="form-control"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={adminUserForm.balance}
+                            onChange={(event) => setAdminUserForm((current) => ({ ...current, balance: event.target.value }))}
+                            disabled={!selectedAdminUser}
+                            required
+                          />
+                        </div>
+                        <div className="col-md-4">
+                          <label className="form-label" htmlFor="adminStatus">Status</label>
+                          <select
+                            id="adminStatus"
+                            className="form-control"
+                            value={adminUserForm.status}
+                            onChange={(event) => setAdminUserForm((current) => ({ ...current, status: event.target.value }))}
+                            disabled={!selectedAdminUser}
+                          >
+                            <option value="active">Active</option>
+                            <option value="suspended">Suspended</option>
+                          </select>
+                        </div>
+                        <div className="col-md-4">
+                          <label className="form-label" htmlFor="adminPassword">New password</label>
+                          <input
+                            id="adminPassword"
+                            className="form-control"
+                            type="password"
+                            value={adminUserForm.password}
+                            onChange={(event) => setAdminUserForm((current) => ({ ...current, password: event.target.value }))}
+                            disabled={!selectedAdminUser}
+                            placeholder="Optional"
+                          />
+                        </div>
+                      </div>
+
+                      <label className="admin-check">
+                        <input
+                          type="checkbox"
+                          checked={adminUserForm.isAdmin}
+                          onChange={(event) => setAdminUserForm((current) => ({ ...current, isAdmin: event.target.checked }))}
+                          disabled={!selectedAdminUser}
+                        />
+                        Admin access
+                      </label>
+
+                      <button className="btn btn-primary" type="submit" disabled={!selectedAdminUser || adminSaving}>
+                        {adminSaving ? 'Saving...' : 'Save user'}
+                      </button>
+                    </form>
+                  </div>
+
+                  <form className="slot-config-panel" onSubmit={saveSlotConfig}>
+                    <div>
+                      <h3>Slotopol settings</h3>
+                      <p className="text-secondary mb-0">
+                        Controls the site slot layer connected to Slotopol. RTP scales payouts before balance settlement.
+                      </p>
+                    </div>
+                    <div className="row g-3">
+                      <div className="col-md-3">
+                        <label className="form-label" htmlFor="slotTitle">Game title</label>
+                        <input
+                          id="slotTitle"
+                          className="form-control"
+                          value={slotConfigForm.title}
+                          onChange={(event) => setSlotConfigForm((current) => ({ ...current, title: event.target.value }))}
+                        />
+                      </div>
+                      <div className="col-md-3">
+                        <label className="form-label" htmlFor="slotRtp">RTP %</label>
+                        <input
+                          id="slotRtp"
+                          className="form-control"
+                          type="number"
+                          min="50"
+                          max="99.9"
+                          step="0.1"
+                          value={slotConfigForm.rtpPercent}
+                          onChange={(event) => setSlotConfigForm((current) => ({ ...current, rtpPercent: event.target.value }))}
+                        />
+                      </div>
+                      <div className="col-md-3">
+                        <label className="form-label" htmlFor="slotMinBet">Min bet</label>
+                        <input
+                          id="slotMinBet"
+                          className="form-control"
+                          type="number"
+                          min="0.01"
+                          step="0.01"
+                          value={slotConfigForm.minBet}
+                          onChange={(event) => setSlotConfigForm((current) => ({ ...current, minBet: event.target.value }))}
+                        />
+                      </div>
+                      <div className="col-md-3">
+                        <label className="form-label" htmlFor="slotMaxBet">Max bet</label>
+                        <input
+                          id="slotMaxBet"
+                          className="form-control"
+                          type="number"
+                          min="0.01"
+                          step="0.01"
+                          value={slotConfigForm.maxBet}
+                          onChange={(event) => setSlotConfigForm((current) => ({ ...current, maxBet: event.target.value }))}
+                        />
+                      </div>
+                    </div>
+                    <div className="slot-config-actions">
+                      <label className="admin-check">
+                        <input
+                          type="checkbox"
+                          checked={slotConfigForm.enabled}
+                          onChange={(event) => setSlotConfigForm((current) => ({ ...current, enabled: event.target.checked }))}
+                        />
+                        Game enabled
+                      </label>
+                      <span>Current RTP {slotConfig ? `${slotConfig.rtpPercent}%` : 'loading'}</span>
+                      <button className="btn btn-primary" type="submit" disabled={adminSaving}>
+                        {adminSaving ? 'Saving...' : 'Save slot settings'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
             </div>
           ) : (
             <div className="auth-card shadow-lg">

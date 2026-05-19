@@ -122,6 +122,20 @@ body {
   background: rgba(216, 180, 106, 0.08);
 }
 
+.admin-pill {
+  display: inline-grid;
+  place-items: center;
+  min-height: 38px;
+  border: 1px solid rgba(216, 180, 106, 0.42);
+  border-radius: 8px;
+  padding: 0 0.75rem;
+  background: rgba(216, 180, 106, 0.13);
+  color: #f6d98f;
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
 .balance-pill span {
   color: rgba(255, 247, 232, 0.58);
   font-size: 0.7rem;
@@ -169,6 +183,11 @@ body {
 }
 
 .slot-card {
+  width: 100%;
+}
+
+.admin-card {
+  grid-column: 1 / -1;
   width: 100%;
 }
 
@@ -321,6 +340,96 @@ body {
   color: #f6d98f;
 }
 
+.admin-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.2fr);
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+
+.admin-list,
+.admin-editor,
+.slot-config-panel {
+  border: 1px solid rgba(216, 180, 106, 0.18);
+  border-radius: 8px;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.admin-list h3,
+.admin-editor h3,
+.slot-config-panel h3 {
+  color: #fff7e8;
+  font-size: 1rem;
+  margin-bottom: 0.9rem;
+}
+
+.admin-user-list {
+  display: grid;
+  gap: 0.55rem;
+  max-height: 420px;
+  overflow: auto;
+}
+
+.admin-user-list button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  border: 1px solid rgba(216, 180, 106, 0.16);
+  border-radius: 8px;
+  padding: 0.75rem;
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff7e8;
+  text-align: left;
+}
+
+.admin-user-list button.active,
+.admin-user-list button:hover {
+  border-color: rgba(216, 180, 106, 0.48);
+  background: rgba(216, 180, 106, 0.12);
+}
+
+.admin-user-list strong,
+.admin-user-list small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.admin-user-list small,
+.slot-config-actions span {
+  color: rgba(255, 247, 232, 0.62);
+}
+
+.admin-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 1rem 1rem 1rem 0;
+  color: rgba(255, 247, 232, 0.82);
+  font-weight: 700;
+}
+
+.admin-check input {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--gold);
+}
+
+.slot-config-panel {
+  margin-top: 1rem;
+}
+
+.slot-config-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
 .auth-card h2 {
   font-size: 1.75rem;
   margin: 0 0 0.25rem;
@@ -421,6 +530,10 @@ body {
   }
 
   .player-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-grid {
     grid-template-columns: 1fr;
   }
 }

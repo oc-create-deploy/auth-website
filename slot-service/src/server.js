@@ -51,7 +51,8 @@ function publicUser(user) {
   return {
     id: user.id,
     email: user.email,
-    balanceCents: Number(user.balance_cents || 0)
+    balanceCents: Number(user.balance_cents || 0),
+    isAdmin: Boolean(user.is_admin || user.isAdmin)
   };
 }
 
@@ -66,7 +67,7 @@ async function requireUser(req, res, next) {
   try {
     const payload = jwt.verify(token, jwtSecret);
     const [rows] = await pool.execute(
-      'SELECT id, email, balance_cents FROM users WHERE id = ? LIMIT 1',
+      'SELECT id, email, balance_cents, is_admin, status FROM users WHERE id = ? LIMIT 1',
       [payload.sub]
     );
 
@@ -74,11 +75,23 @@ async function requireUser(req, res, next) {
       return res.status(401).json({ message: 'User no longer exists.' });
     }
 
+    if (rows[0].status !== 'active') {
+      return res.status(403).json({ message: 'Account is not active.' });
+    }
+
     req.user = rows[0];
     next();
   } catch (_error) {
     res.status(401).json({ message: 'Invalid or expired session.' });
   }
+}
+
+function requireAdmin(req, res, next) {
+  if (!req.user?.is_admin) {
+    return res.status(403).json({ message: 'Admin access required.' });
+  }
+
+  next();
 }
 
 function parseBet(value) {
@@ -145,6 +158,17 @@ function calculateWin(spin, betCents) {
   return { winCents, winningLines };
 }
 
+function applyRtp(winCents, config) {
+  const target = Number(config.rtp_percent);
+  const base = 96;
+
+  if (!Number.isFinite(target) || target <= 0) {
+    return winCents;
+  }
+
+  return Math.max(0, Math.floor(winCents * (target / base)));
+}
+
 async function initializeDatabase() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS slot_spins (
@@ -159,6 +183,50 @@ async function initializeDatabase() {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
   `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS slot_game_configs (
+      game_code VARCHAR(80) PRIMARY KEY,
+      title VARCHAR(120) NOT NULL,
+      rtp_percent DECIMAL(5,2) NOT NULL DEFAULT 96.00,
+      min_bet_cents INT NOT NULL DEFAULT 100,
+      max_bet_cents INT NOT NULL DEFAULT 100000,
+      enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )
+  `);
+
+  await pool.query(`
+    INSERT INTO slot_game_configs (game_code, title, rtp_percent, min_bet_cents, max_bet_cents, enabled)
+    VALUES ('ctinteractive/luckydollar', 'Lucky Dollar', 96.00, 100, 100000, TRUE)
+    ON DUPLICATE KEY UPDATE game_code = game_code
+  `);
+}
+
+async function getGameConfig(gameCode = 'ctinteractive/luckydollar') {
+  const [rows] = await pool.execute(
+    `
+      SELECT game_code, title, rtp_percent, min_bet_cents, max_bet_cents, enabled, updated_at
+      FROM slot_game_configs
+      WHERE game_code = ?
+      LIMIT 1
+    `,
+    [gameCode]
+  );
+
+  return rows[0];
+}
+
+function publicGameConfig(config) {
+  return {
+    gameCode: config.game_code,
+    title: config.title,
+    rtpPercent: Number(config.rtp_percent),
+    minBet: Number(config.min_bet_cents) / 100,
+    maxBet: Number(config.max_bet_cents) / 100,
+    enabled: Boolean(config.enabled),
+    updatedAt: config.updated_at
+  };
 }
 
 async function getSlotopolStatus() {
@@ -175,17 +243,52 @@ app.get('/health', async (_req, res) => {
 });
 
 app.get('/api/slots/session', requireUser, async (req, res) => {
+  const config = await getGameConfig();
   res.json({
     game: {
-      code: 'ctinteractive/luckydollar',
-      title: 'Lucky Dollar',
+      code: config.game_code,
+      title: config.title,
       lines: 5,
-      minBet: 1,
-      maxBet: 1000,
-      slotopolStatus: await getSlotopolStatus()
+      minBet: Number(config.min_bet_cents) / 100,
+      maxBet: Number(config.max_bet_cents) / 100,
+      slotopolStatus: await getSlotopolStatus(),
+      enabled: Boolean(config.enabled)
     },
     user: publicUser(req.user)
   });
+});
+
+app.get('/api/admin/slot-config', requireUser, requireAdmin, async (_req, res) => {
+  const config = await getGameConfig();
+  res.json({ config: publicGameConfig(config), slotopolStatus: await getSlotopolStatus() });
+});
+
+app.patch('/api/admin/slot-config', requireUser, requireAdmin, async (req, res) => {
+  const title = String(req.body.title || '').trim() || 'Lucky Dollar';
+  const rtpPercent = Number(req.body.rtpPercent);
+  const minBet = Number(req.body.minBet);
+  const maxBet = Number(req.body.maxBet);
+  const enabled = Boolean(req.body.enabled);
+
+  if (!Number.isFinite(rtpPercent) || rtpPercent < 50 || rtpPercent > 99.9) {
+    return res.status(400).json({ message: 'RTP must be from 50 to 99.9 percent.' });
+  }
+
+  if (!Number.isFinite(minBet) || !Number.isFinite(maxBet) || minBet < 0.01 || maxBet < minBet || maxBet > 1000000) {
+    return res.status(400).json({ message: 'Bet limits are invalid.' });
+  }
+
+  await pool.execute(
+    `
+      UPDATE slot_game_configs
+      SET title = ?, rtp_percent = ?, min_bet_cents = ?, max_bet_cents = ?, enabled = ?
+      WHERE game_code = 'ctinteractive/luckydollar'
+    `,
+    [title, rtpPercent, Math.round(minBet * 100), Math.round(maxBet * 100), enabled ? 1 : 0]
+  );
+
+  const config = await getGameConfig();
+  res.json({ config: publicGameConfig(config), slotopolStatus: await getSlotopolStatus() });
 });
 
 app.get('/api/slots/history', requireUser, async (req, res) => {
@@ -206,9 +309,20 @@ app.get('/api/slots/history', requireUser, async (req, res) => {
 
 app.post('/api/slots/spin', requireUser, async (req, res) => {
   const betCents = parseBet(req.body.bet);
+  const config = await getGameConfig();
 
   if (!betCents) {
     return res.status(400).json({ message: 'Enter a stake from 1 to 1,000.' });
+  }
+
+  if (!config.enabled) {
+    return res.status(403).json({ message: 'This slot is currently disabled.' });
+  }
+
+  if (betCents < Number(config.min_bet_cents) || betCents > Number(config.max_bet_cents)) {
+    return res.status(400).json({
+      message: `Enter a stake from $${(Number(config.min_bet_cents) / 100).toFixed(2)} to $${(Number(config.max_bet_cents) / 100).toFixed(2)}.`
+    });
   }
 
   const connection = await pool.getConnection();
@@ -234,6 +348,11 @@ app.post('/api/slots/spin', requireUser, async (req, res) => {
 
     const spin = buildSpin();
     const outcome = calculateWin(spin, betCents);
+    outcome.winCents = applyRtp(outcome.winCents, config);
+    outcome.winningLines = outcome.winningLines.map((line) => ({
+      ...line,
+      amountCents: applyRtp(line.amountCents, config)
+    }));
     const balanceAfter = Number(user.balance_cents) - betCents + outcome.winCents;
 
     await connection.execute('UPDATE users SET balance_cents = ? WHERE id = ?', [balanceAfter, user.id]);

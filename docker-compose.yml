@@ -30,6 +30,8 @@ services:
       DB_NAME: auth_app
       JWT_SECRET: local-dev-secret-change-me
       CORS_ORIGIN: http://localhost:5173
+      ADMIN_EMAIL: admin@casusdt.com
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-change-this-before-deploy}
     ports:
       - "3000:3000"
     depends_on:
