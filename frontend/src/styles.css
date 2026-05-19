@@ -47,6 +47,14 @@ body {
   padding: 7rem 0 3rem;
 }
 
+.player-grid {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.95fr) minmax(360px, 1.05fr);
+  gap: 1.25rem;
+  width: min(100%, 1180px);
+  align-items: start;
+}
+
 .site-header {
   position: fixed;
   top: 0;
@@ -157,7 +165,11 @@ body {
 }
 
 .cashier-card {
-  width: min(100%, 620px);
+  width: 100%;
+}
+
+.slot-card {
+  width: 100%;
 }
 
 .cashier-head {
@@ -255,6 +267,58 @@ body {
   display: block;
   color: rgba(255, 247, 232, 0.58);
   margin-top: 0.15rem;
+}
+
+.slot-machine {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 1.5rem 0;
+  padding: 1rem;
+  border: 1px solid rgba(216, 180, 106, 0.2);
+  border-radius: 8px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.07), rgba(216, 180, 106, 0.08));
+}
+
+.slot-reel {
+  display: grid;
+  grid-template-rows: repeat(3, 76px);
+  gap: 0.55rem;
+}
+
+.slot-reel span {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  border: 1px solid rgba(216, 180, 106, 0.32);
+  border-radius: 8px;
+  background: radial-gradient(circle at 50% 18%, rgba(255, 248, 219, 0.16), rgba(0, 0, 0, 0.34));
+  color: #f4d78f;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.55rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.slot-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 1rem 0 1.25rem;
+  border: 1px solid rgba(216, 180, 106, 0.22);
+  border-radius: 8px;
+  padding: 0.9rem;
+  background: rgba(216, 180, 106, 0.08);
+}
+
+.slot-result span,
+.slot-result small {
+  color: rgba(255, 247, 232, 0.62);
+}
+
+.slot-result strong {
+  color: #f6d98f;
 }
 
 .auth-card h2 {
@@ -355,6 +419,10 @@ body {
   .app-stage {
     padding-top: 7rem;
   }
+
+  .player-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 575.98px) {
@@ -397,6 +465,10 @@ body {
   .cashier-head,
   .deposit-control {
     display: block;
+  }
+
+  .slot-reel {
+    grid-template-rows: repeat(3, 58px);
   }
 
   .vault-balance {
