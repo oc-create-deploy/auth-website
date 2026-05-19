@@ -12,6 +12,27 @@ function formatMoney(cents = 0) {
   }).format(Number(cents) / 100);
 }
 
+function slotSymbolIcon(symbol) {
+  const raw = String(symbol?.icon || symbol?.id || '');
+  const symbolMap = {
+    1: '7',
+    2: 'BAR',
+    3: '$',
+    4: 'A',
+    5: 'K',
+    6: 'Q',
+    7: 'J',
+    8: '10',
+    9: '9',
+    10: '8',
+    11: 'WILD',
+    12: 'BONUS',
+    13: 'x2'
+  };
+
+  return symbolMap[raw] || raw;
+}
+
 function App() {
   const [mode, setMode] = useState('login');
   const [activeView, setActiveView] = useState('cashier');
@@ -531,65 +552,64 @@ function App() {
 
               {activeView === 'slot' && (
               <div className="auth-card slot-card shadow-lg">
-                <div className="cashier-head">
-                  <div>
-                    <span className="eyebrow compact">Slot room</span>
-                    <h2>{slotSession?.title || 'Lucky Dollar'}</h2>
-                    <p className="text-secondary mb-0">
-                      Uses the same login token and settles each spin against your cashier balance.
-                    </p>
+                <div className="slot-cabinet">
+                  <div className="slot-marquee">
+                    <span>{slotSession?.title || 'Lucky Dollar'}</span>
+                    <strong>{slotResult?.winCents > 0 ? `WIN ${formatMoney(slotResult.winCents)}` : '30 LINES'}</strong>
+                    <small>Engine {slotSession?.slotopolStatus || 'loading'}</small>
                   </div>
-                  <div className="vault-balance">
-                    <span>Engine</span>
-                    <strong>{slotSession?.slotopolStatus || 'loading'}</strong>
-                  </div>
-                </div>
 
-                <div className="slot-machine" aria-label="Slot reels">
-                  {(slotResult?.reels || [
-                    [{ icon: '1' }, { icon: '7' }, { icon: '3' }],
-                    [{ icon: '4' }, { icon: '9' }, { icon: '2' }],
-                    [{ icon: '7' }, { icon: '5' }, { icon: '1' }],
-                    [{ icon: '8' }, { icon: '3' }, { icon: '6' }],
-                    [{ icon: '2' }, { icon: '10' }, { icon: '4' }]
-                  ]).map((reel, reelIndex) => (
-                    <div className="slot-reel" key={reelIndex}>
-                      {reel.map((symbol, rowIndex) => (
-                        <span key={`${reelIndex}-${rowIndex}-${symbol.icon}`}>{symbol.icon}</span>
+                  <div className="slot-screen">
+                    <div className="slot-payline" aria-hidden="true" />
+                    <div className="slot-machine" aria-label="Slot reels">
+                      {(slotResult?.reels || [
+                        [{ icon: '7' }, { icon: 'BAR' }, { icon: '$' }],
+                        [{ icon: 'A' }, { icon: '7' }, { icon: 'K' }],
+                        [{ icon: '$' }, { icon: 'WILD' }, { icon: '7' }],
+                        [{ icon: 'Q' }, { icon: 'BAR' }, { icon: 'A' }],
+                        [{ icon: '7' }, { icon: '$' }, { icon: 'BONUS' }]
+                      ]).map((reel, reelIndex) => (
+                        <div className="slot-reel" key={reelIndex}>
+                          {reel.map((symbol, rowIndex) => (
+                            <span key={`${reelIndex}-${rowIndex}-${symbol.icon}`}>{slotSymbolIcon(symbol)}</span>
+                          ))}
+                        </div>
                       ))}
                     </div>
-                  ))}
-                </div>
+                  </div>
 
-                <div className="slot-controls">
-                  <label className="form-label" htmlFor="slotBet">Stake</label>
-                  <div className="deposit-control">
-                    <span>$</span>
-                    <input
-                      id="slotBet"
-                      className="form-control form-control-lg"
-                      type="number"
-                      min="1"
-                      max="1000"
-                      step="0.01"
-                      value={slotBet}
-                      onChange={(event) => setSlotBet(event.target.value)}
-                    />
-                    <button className="btn btn-primary btn-lg" type="button" disabled={spinning} onClick={spinSlot}>
-                      {spinning ? 'Spinning...' : 'Spin'}
+                  <div className="slot-console">
+                    <div className="slot-meter">
+                      <span>Balance</span>
+                      <strong>{formatMoney(user.balanceCents)}</strong>
+                    </div>
+                    <div className="slot-meter">
+                      <span>Last spin</span>
+                      <strong>{slotResult ? formatMoney(slotResult.netCents) : '$0.00'}</strong>
+                    </div>
+                    <div className="slot-bet-panel">
+                      <label className="form-label" htmlFor="slotBet">Stake</label>
+                      <div className="slot-bet-control">
+                        <span>$</span>
+                        <input
+                          id="slotBet"
+                          className="form-control form-control-lg"
+                          type="number"
+                          min="1"
+                          max="1000"
+                          step="0.01"
+                          value={slotBet}
+                          onChange={(event) => setSlotBet(event.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <button className="slot-spin-button" type="button" disabled={spinning} onClick={spinSlot}>
+                      {spinning ? 'Spinning' : 'Spin'}
                     </button>
                   </div>
                 </div>
 
-                {slotResult && (
-                  <div className="slot-result">
-                    <span>Last spin</span>
-                    <strong>{slotResult.winCents > 0 ? `Won ${formatMoney(slotResult.winCents)}` : 'No win'}</strong>
-                    <small>Net {formatMoney(slotResult.netCents)}</small>
-                  </div>
-                )}
-
-                <div className="deposit-history">
+                <div className="deposit-history slot-history">
                   <h3>Recent spins</h3>
                   {slotHistory.length === 0 ? (
                     <p className="text-secondary mb-0">No slot activity yet.</p>
