@@ -47,11 +47,58 @@ body {
   padding: 7rem 0 3rem;
 }
 
-.player-grid {
+.member-layout {
   display: grid;
-  grid-template-columns: minmax(320px, 0.95fr) minmax(360px, 1.05fr);
+  grid-template-columns: 220px minmax(0, 1fr);
   gap: 1.25rem;
   width: min(100%, 1180px);
+  align-items: start;
+}
+
+.member-sidebar {
+  position: sticky;
+  top: 96px;
+  display: grid;
+  gap: 0.75rem;
+  border: 1px solid rgba(216, 180, 106, 0.2);
+  border-radius: 8px;
+  padding: 0.75rem;
+  background: rgba(8, 10, 15, 0.82);
+  backdrop-filter: blur(14px);
+}
+
+.member-sidebar button {
+  display: grid;
+  gap: 0.15rem;
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 0.85rem;
+  background: transparent;
+  color: rgba(255, 247, 232, 0.72);
+  text-align: left;
+}
+
+.member-sidebar button.active,
+.member-sidebar button:hover {
+  border-color: rgba(216, 180, 106, 0.42);
+  background: rgba(216, 180, 106, 0.12);
+  color: #fff7e8;
+}
+
+.member-sidebar span {
+  font-weight: 800;
+}
+
+.member-sidebar small {
+  color: rgba(255, 247, 232, 0.55);
+}
+
+.player-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.25rem;
+  width: 100%;
   align-items: start;
 }
 
@@ -186,6 +233,10 @@ body {
   width: 100%;
 }
 
+.games-card {
+  width: 100%;
+}
+
 .admin-card {
   grid-column: 1 / -1;
   width: 100%;
@@ -288,9 +339,53 @@ body {
   margin-top: 0.15rem;
 }
 
+.games-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.game-tile {
+  display: grid;
+  gap: 0.65rem;
+  min-height: 190px;
+  border: 1px solid rgba(216, 180, 106, 0.22);
+  border-radius: 8px;
+  padding: 1rem;
+  background: linear-gradient(145deg, rgba(216, 180, 106, 0.14), rgba(255, 255, 255, 0.05));
+  color: #fff7e8;
+  text-align: left;
+}
+
+.game-tile:hover,
+.game-tile:focus {
+  border-color: rgba(216, 180, 106, 0.58);
+  background: linear-gradient(145deg, rgba(216, 180, 106, 0.2), rgba(255, 255, 255, 0.07));
+}
+
+.game-tile strong {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.35rem;
+}
+
+.game-tile small {
+  color: rgba(255, 247, 232, 0.62);
+}
+
+.game-badge {
+  justify-self: start;
+  border: 1px solid rgba(216, 180, 106, 0.28);
+  border-radius: 999px;
+  padding: 0.25rem 0.55rem;
+  color: #f6d98f;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
 .slot-machine {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.75rem;
   margin: 1.5rem 0;
   padding: 1rem;
@@ -529,8 +624,14 @@ body {
     padding-top: 7rem;
   }
 
+  .member-layout,
   .player-grid {
     grid-template-columns: 1fr;
+  }
+
+  .member-sidebar {
+    position: static;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .admin-grid {

@@ -14,6 +14,7 @@ function formatMoney(cents = 0) {
 
 function App() {
   const [mode, setMode] = useState('login');
+  const [activeView, setActiveView] = useState('cashier');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [amount, setAmount] = useState('250');
@@ -52,6 +53,15 @@ function App() {
   const title = mode === 'login' ? 'Access account' : 'Request membership';
   const submitLabel = mode === 'login' ? 'Sign in' : 'Register';
   const selectedAdminUser = adminUsers.find((item) => String(item.id) === selectedAdminUserId);
+  const games = [
+    {
+      code: 'ctinteractive/luckydollar',
+      title: slotSession?.title || 'Lucky Dollar',
+      provider: 'CT Interactive',
+      lines: slotSession?.lines || 30,
+      status: slotSession?.enabled === false ? 'Disabled' : 'Available'
+    }
+  ];
 
   const passwordHint = useMemo(() => {
     if (mode === 'login') {
@@ -322,6 +332,11 @@ function App() {
     }
   }
 
+  function openSlotGame() {
+    setActiveView('slot');
+    setMessage('');
+  }
+
   function switchAuthMode(nextMode) {
     setMode(nextMode);
     setMessage('');
@@ -370,7 +385,7 @@ function App() {
                   </div>
                 )}
                 <button type="button" className="btn btn-outline-primary btn-sm" onClick={logout}>
-                  Sign out
+                  Logout
                 </button>
               </>
             ) : (
@@ -400,7 +415,28 @@ function App() {
       <section className="auth-shell container">
         <div className="app-stage">
           {user ? (
-            <div className="player-grid">
+            <div className="member-layout">
+              <aside className="member-sidebar" aria-label="Account navigation">
+                <button
+                  type="button"
+                  className={activeView === 'cashier' ? 'active' : ''}
+                  onClick={() => setActiveView('cashier')}
+                >
+                  <span>Cashier</span>
+                  <small>Balance and deposits</small>
+                </button>
+                <button
+                  type="button"
+                  className={activeView === 'games' || activeView === 'slot' ? 'active' : ''}
+                  onClick={() => setActiveView('games')}
+                >
+                  <span>Games</span>
+                  <small>Slots catalogue</small>
+                </button>
+              </aside>
+
+              <div className="player-grid">
+              {activeView === 'cashier' && (
               <div className="auth-card cashier-card shadow-lg">
                 <div className="cashier-head">
                   <div>
@@ -468,7 +504,32 @@ function App() {
                   </div>
                 )}
               </div>
+              )}
 
+              {activeView === 'games' && (
+                <div className="auth-card games-card shadow-lg">
+                  <div className="cashier-head">
+                    <div>
+                      <span className="eyebrow compact">Games</span>
+                      <h2>Available slots</h2>
+                      <p className="text-secondary mb-0">Choose a game to open the dedicated slot page.</p>
+                    </div>
+                  </div>
+
+                  <div className="games-grid">
+                    {games.map((game) => (
+                      <button key={game.code} type="button" className="game-tile" onClick={openSlotGame}>
+                        <span className="game-badge">{game.provider}</span>
+                        <strong>{game.title}</strong>
+                        <small>{game.lines} lines · {game.status}</small>
+                        <span className="btn btn-primary btn-sm">Open game</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {activeView === 'slot' && (
               <div className="auth-card slot-card shadow-lg">
                 <div className="cashier-head">
                   <div>
@@ -486,9 +547,11 @@ function App() {
 
                 <div className="slot-machine" aria-label="Slot reels">
                   {(slotResult?.reels || [
-                    [{ icon: '♛' }, { icon: '7' }, { icon: '$' }],
-                    [{ icon: '♦' }, { icon: 'BAR' }, { icon: '●' }],
-                    [{ icon: '7' }, { icon: '◆' }, { icon: '♛' }]
+                    [{ icon: '1' }, { icon: '7' }, { icon: '3' }],
+                    [{ icon: '4' }, { icon: '9' }, { icon: '2' }],
+                    [{ icon: '7' }, { icon: '5' }, { icon: '1' }],
+                    [{ icon: '8' }, { icon: '3' }, { icon: '6' }],
+                    [{ icon: '2' }, { icon: '10' }, { icon: '4' }]
                   ]).map((reel, reelIndex) => (
                     <div className="slot-reel" key={reelIndex}>
                       {reel.map((symbol, rowIndex) => (
@@ -545,8 +608,9 @@ function App() {
                   )}
                 </div>
               </div>
+              )}
 
-              {user.isAdmin && (
+              {user.isAdmin && activeView === 'cashier' && (
                 <div className="auth-card admin-card shadow-lg">
                   <div className="cashier-head">
                     <div>
@@ -734,6 +798,7 @@ function App() {
                   </form>
                 </div>
               )}
+              </div>
             </div>
           ) : (
             <div className="auth-card shadow-lg">
