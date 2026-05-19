@@ -381,7 +381,7 @@ app.post('/api/deposits', requireUser, async (req, res) => {
       }
 
       const [users] = await connection.execute(
-        'SELECT id, email, balance_cents FROM users WHERE id = ? LIMIT 1',
+        'SELECT id, email, balance_cents, is_admin, full_name, status, created_at FROM users WHERE id = ? LIMIT 1',
         [req.user.id]
       );
       await connection.commit();

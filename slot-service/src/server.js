@@ -396,7 +396,7 @@ app.get('/api/slots/session', requireUser, async (req, res) => {
     game: {
       code: config.game_code,
       title: config.title,
-      lines: 5,
+      lines: slotopolLines,
       minBet: Number(config.min_bet_cents) / 100,
       maxBet: Number(config.max_bet_cents) / 100,
       slotopolStatus: await getSlotopolStatus(),
@@ -480,7 +480,7 @@ app.post('/api/slots/spin', requireUser, async (req, res) => {
     await connection.beginTransaction();
 
     const [users] = await connection.execute(
-      'SELECT id, email, balance_cents FROM users WHERE id = ? FOR UPDATE',
+      'SELECT id, email, balance_cents, is_admin, status FROM users WHERE id = ? FOR UPDATE',
       [req.user.id]
     );
     const user = users[0];
