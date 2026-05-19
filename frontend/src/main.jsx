@@ -44,7 +44,7 @@ function App() {
   const [deposits, setDeposits] = useState([]);
   const [slotSession, setSlotSession] = useState(null);
   const [slotHistory, setSlotHistory] = useState([]);
-  const [slotBet, setSlotBet] = useState('25');
+  const [slotBet, setSlotBet] = useState('1');
   const [slotResult, setSlotResult] = useState(null);
   const [adminUsers, setAdminUsers] = useState([]);
   const [selectedAdminUserId, setSelectedAdminUserId] = useState('');
@@ -386,9 +386,9 @@ function App() {
       <header className="site-header">
         <div className="container header-inner">
           <div className="brand-mark">
-            <span>AE</span>
+            <span>CU</span>
             <div>
-              <strong>Aurum Exchange</strong>
+              <strong>CasUSDT.com</strong>
               <small>Private cashier</small>
             </div>
           </div>
@@ -463,7 +463,6 @@ function App() {
                   <div>
                     <span className="eyebrow compact">Cashier</span>
                     <h2>Deposit funds</h2>
-                    <p className="text-secondary mb-0">Live Cloakd checkout opens after deposit request. Balance updates after payment confirmation.</p>
                   </div>
                   <div className="vault-balance">
                     <span>Available</span>
@@ -510,7 +509,7 @@ function App() {
                         <li key={item.id}>
                           <span>
                             <strong>{formatMoney(item.amountCents)}</strong>
-                            <small>{item.provider} · {item.status}</small>
+                            <small>{item.status}</small>
                           </span>
                           <span>{item.currency}</span>
                         </li>
@@ -540,7 +539,6 @@ function App() {
                   <div className="games-grid">
                     {games.map((game) => (
                       <button key={game.code} type="button" className="game-tile" onClick={openSlotGame}>
-                        <span className="game-badge">{game.provider}</span>
                         <strong>{game.title}</strong>
                         <small>{game.lines} lines · {game.status}</small>
                         <span className="btn btn-primary btn-sm">Open game</span>
@@ -584,11 +582,11 @@ function App() {
                       <strong>{formatMoney(user.balanceCents)}</strong>
                     </div>
                     <div className="slot-meter">
-                      <span>Last spin</span>
-                      <strong>{slotResult ? formatMoney(slotResult.netCents) : '$0.00'}</strong>
+                      <span>Last win</span>
+                      <strong>{slotResult ? formatMoney(slotResult.winCents) : '$0.00'}</strong>
                     </div>
                     <div className="slot-bet-panel">
-                      <label className="form-label" htmlFor="slotBet">Stake</label>
+                      <label className="form-label" htmlFor="slotBet">Bet</label>
                       <div className="slot-bet-control">
                         <span>$</span>
                         <input
@@ -619,7 +617,7 @@ function App() {
                         <li key={item.id}>
                           <span>
                             <strong>{formatMoney(item.winCents)}</strong>
-                            <small>Stake {formatMoney(item.betCents)}</small>
+                            <small>Bet {formatMoney(item.betCents)}</small>
                           </span>
                           <span>{formatMoney(item.balanceAfterCents)}</span>
                         </li>

@@ -372,17 +372,6 @@ body {
   color: rgba(255, 247, 232, 0.62);
 }
 
-.game-badge {
-  justify-self: start;
-  border: 1px solid rgba(216, 180, 106, 0.28);
-  border-radius: 999px;
-  padding: 0.25rem 0.55rem;
-  color: #f6d98f;
-  font-size: 0.72rem;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
 .slot-cabinet {
   position: relative;
   overflow: hidden;
