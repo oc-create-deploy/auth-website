@@ -4,6 +4,15 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import './styles.css';
 
 const apiUrl = import.meta.env.VITE_API_URL || '';
+const slotSymbols = ['7', 'BAR', '$', 'A', 'K', 'Q', 'J', '10', '9', '8', 'WILD', 'BONUS'];
+const defaultReels = [
+  [{ icon: '7' }, { icon: 'BAR' }, { icon: '$' }],
+  [{ icon: 'A' }, { icon: '7' }, { icon: 'K' }],
+  [{ icon: '$' }, { icon: 'WILD' }, { icon: '7' }],
+  [{ icon: 'Q' }, { icon: 'BAR' }, { icon: 'A' }],
+  [{ icon: '7' }, { icon: '$' }, { icon: 'BONUS' }]
+];
+const spinAnimationMs = 1800;
 
 function formatMoney(cents = 0) {
   return new Intl.NumberFormat('en-US', {
@@ -33,6 +42,14 @@ function slotSymbolIcon(symbol) {
   return symbolMap[raw] || raw;
 }
 
+function randomSlotSymbol() {
+  return { icon: slotSymbols[Math.floor(Math.random() * slotSymbols.length)] };
+}
+
+function buildAnimatedReels() {
+  return Array.from({ length: 5 }, () => Array.from({ length: 12 }, randomSlotSymbol));
+}
+
 function App() {
   const [mode, setMode] = useState('login');
   const [activeView, setActiveView] = useState('cashier');
@@ -46,6 +63,7 @@ function App() {
   const [slotHistory, setSlotHistory] = useState([]);
   const [slotBet, setSlotBet] = useState('1');
   const [slotResult, setSlotResult] = useState(null);
+  const [animatedReels, setAnimatedReels] = useState(null);
   const [adminUsers, setAdminUsers] = useState([]);
   const [selectedAdminUserId, setSelectedAdminUserId] = useState('');
   const [adminUserForm, setAdminUserForm] = useState({
@@ -345,16 +363,20 @@ function App() {
 
   async function spinSlot() {
     setSpinning(true);
+    setAnimatedReels(buildAnimatedReels());
     setMessage('');
 
     try {
-      const data = await slotRequest('/slots/spin', {
+      const spinRequest = slotRequest('/slots/spin', {
         method: 'POST',
         body: JSON.stringify({ bet: slotBet })
       });
+      const spinDelay = new Promise((resolve) => setTimeout(resolve, spinAnimationMs));
+      const [data] = await Promise.all([spinRequest, spinDelay]);
 
       setUser(data.user);
       setSlotResult(data.result);
+      setAnimatedReels(null);
       await loadSlotHistory();
       setMessage(
         data.result.winCents > 0
@@ -362,6 +384,7 @@ function App() {
           : 'No win on this spin.'
       );
     } catch (error) {
+      setAnimatedReels(null);
       setMessage(error.message);
     } finally {
       setSpinning(false);
@@ -575,14 +598,12 @@ function App() {
                   <div className="slot-screen">
                     <div className="slot-payline" aria-hidden="true" />
                     <div className="slot-machine" aria-label="Slot reels">
-                      {(slotResult?.reels || [
-                        [{ icon: '7' }, { icon: 'BAR' }, { icon: '$' }],
-                        [{ icon: 'A' }, { icon: '7' }, { icon: 'K' }],
-                        [{ icon: '$' }, { icon: 'WILD' }, { icon: '7' }],
-                        [{ icon: 'Q' }, { icon: 'BAR' }, { icon: 'A' }],
-                        [{ icon: '7' }, { icon: '$' }, { icon: 'BONUS' }]
-                      ]).map((reel, reelIndex) => (
-                        <div className="slot-reel" key={reelIndex}>
+                      {(animatedReels || slotResult?.reels || defaultReels).map((reel, reelIndex) => (
+                        <div
+                          className={`slot-reel ${spinning ? 'is-spinning' : ''}`}
+                          key={reelIndex}
+                          style={spinning ? { '--spin-delay': `${reelIndex * 110}ms` } : undefined}
+                        >
                           {reel.map((symbol, rowIndex) => (
                             <span key={`${reelIndex}-${rowIndex}-${symbol.icon}`}>{slotSymbolIcon(symbol)}</span>
                           ))}
@@ -595,10 +616,6 @@ function App() {
                     <div className="slot-meter">
                       <span>Balance</span>
                       <strong>{formatMoney(user.balanceCents)}</strong>
-                    </div>
-                    <div className="slot-meter">
-                      <span>Last win</span>
-                      <strong>{slotResult ? formatMoney(slotResult.winCents) : '$0.00'}</strong>
                     </div>
                     <div className="slot-bet-panel">
                       <label className="form-label" htmlFor="slotBet">Bet</label>
