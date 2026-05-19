@@ -12,7 +12,7 @@ const defaultReels = [
   [{ icon: 'Q' }, { icon: 'BAR' }, { icon: 'A' }],
   [{ icon: '7' }, { icon: '$' }, { icon: 'BONUS' }]
 ];
-const spinAnimationMs = 2300;
+const spinAnimationMs = 2400;
 
 function formatMoney(cents = 0) {
   return new Intl.NumberFormat('en-US', {
@@ -50,6 +50,17 @@ function buildAnimatedReels() {
   return Array.from({ length: 5 }, () => Array.from({ length: 18 }, randomSlotSymbol));
 }
 
+function buildSettlingReels(finalReels) {
+  return finalReels.map((reel) => [
+    ...reel,
+    ...Array.from({ length: 15 }, randomSlotSymbol)
+  ]);
+}
+
+function formatWinningLine(line) {
+  return `Line ${Number(line.index || 0) + 1}: ${formatMoney(line.amountCents)}`;
+}
+
 function App() {
   const [mode, setMode] = useState('login');
   const [activeView, setActiveView] = useState('cashier');
@@ -64,6 +75,7 @@ function App() {
   const [slotBet, setSlotBet] = useState('1');
   const [slotResult, setSlotResult] = useState(null);
   const [animatedReels, setAnimatedReels] = useState(null);
+  const [slotSpinPhase, setSlotSpinPhase] = useState('idle');
   const [adminUsers, setAdminUsers] = useState([]);
   const [selectedAdminUserId, setSelectedAdminUserId] = useState('');
   const [adminUserForm, setAdminUserForm] = useState({
@@ -363,6 +375,7 @@ function App() {
 
   async function spinSlot() {
     setSpinning(true);
+    setSlotSpinPhase('rolling');
     setAnimatedReels(buildAnimatedReels());
     setMessage('');
 
@@ -371,12 +384,16 @@ function App() {
         method: 'POST',
         body: JSON.stringify({ bet: slotBet })
       });
-      const spinDelay = new Promise((resolve) => setTimeout(resolve, spinAnimationMs));
-      const [data] = await Promise.all([spinRequest, spinDelay]);
+      const data = await spinRequest;
+
+      setSlotSpinPhase('settling');
+      setAnimatedReels(buildSettlingReels(data.result.reels || defaultReels));
+      await new Promise((resolve) => setTimeout(resolve, spinAnimationMs));
 
       setUser(data.user);
       setSlotResult(data.result);
       setAnimatedReels(null);
+      setSlotSpinPhase('idle');
       await loadSlotHistory();
       setMessage(
         data.result.winCents > 0
@@ -385,6 +402,7 @@ function App() {
       );
     } catch (error) {
       setAnimatedReels(null);
+      setSlotSpinPhase('idle');
       setMessage(error.message);
     } finally {
       setSpinning(false);
@@ -592,7 +610,6 @@ function App() {
                   <div className="slot-marquee">
                     <span>{slotSession?.title || 'Lucky Dollar'}</span>
                     <strong>{slotResult?.winCents > 0 ? `WIN ${formatMoney(slotResult.winCents)}` : '30 LINES'}</strong>
-                    <small>Engine {slotSession?.slotopolStatus || 'loading'}</small>
                   </div>
 
                   <div className="slot-screen">
@@ -600,11 +617,10 @@ function App() {
                     <div className="slot-machine" aria-label="Slot reels">
                       {(animatedReels || slotResult?.reels || defaultReels).map((reel, reelIndex) => (
                         <div
-                          className={`slot-reel ${spinning ? 'is-spinning' : ''}`}
+                          className={`slot-reel ${spinning ? `is-${slotSpinPhase}` : ''}`}
                           key={reelIndex}
                           style={spinning ? {
-                            '--spin-offset': `-${reelIndex * 140}ms`,
-                            '--spin-duration': `${520 + reelIndex * 45}ms`
+                            '--spin-duration': `${1700 + reelIndex * 160}ms`
                           } : undefined}
                         >
                           <div className="slot-reel-strip">
@@ -643,6 +659,17 @@ function App() {
                     </button>
                   </div>
                 </div>
+
+                {slotResult?.winningLines?.length > 0 && (
+                  <div className="slot-win-lines" aria-live="polite">
+                    <h3>Winning lines</h3>
+                    <div>
+                      {slotResult.winningLines.map((line, index) => (
+                        <span key={`${line.index}-${index}`}>{formatWinningLine(line)}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="deposit-history slot-history">
                   <h3>Recent spins</h3>

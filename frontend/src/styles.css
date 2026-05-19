@@ -497,9 +497,13 @@ body {
   gap: 0.35rem;
 }
 
-.slot-reel.is-spinning .slot-reel-strip {
-  animation: reel-roll var(--spin-duration, 560ms) cubic-bezier(0.22, 0.61, 0.36, 1) infinite;
-  animation-delay: var(--spin-offset, 0ms);
+.slot-reel.is-rolling .slot-reel-strip {
+  animation: reel-loop 0.36s linear infinite;
+  will-change: transform;
+}
+
+.slot-reel.is-settling .slot-reel-strip {
+  animation: reel-roll var(--spin-duration, 560ms) cubic-bezier(0.12, 0.78, 0.18, 1) both;
   will-change: transform;
 }
 
@@ -518,18 +522,67 @@ body {
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 
-.slot-reel.is-spinning .slot-reel-strip span {
+.slot-reel.is-rolling .slot-reel-strip span,
+.slot-reel.is-settling .slot-reel-strip span {
   filter: blur(0.9px);
 }
 
-@keyframes reel-roll {
+@keyframes reel-loop {
   0% {
-    transform: translate3d(0, -72%, 0);
+    transform: translate3d(0, -38%, 0);
   }
 
   100% {
     transform: translate3d(0, 0, 0);
   }
+}
+
+@keyframes reel-roll {
+  0% {
+    transform: translate3d(0, -74%, 0);
+  }
+
+  72% {
+    transform: translate3d(0, -9%, 0);
+  }
+
+  88% {
+    transform: translate3d(0, -2%, 0);
+  }
+
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.slot-win-lines {
+  margin-top: 1rem;
+  border: 1px solid rgba(246, 217, 143, 0.2);
+  border-radius: 8px;
+  padding: 0.9rem;
+  background: rgba(216, 180, 106, 0.08);
+}
+
+.slot-win-lines h3 {
+  margin-bottom: 0.65rem;
+  color: #fff7e8;
+  font-size: 1rem;
+}
+
+.slot-win-lines div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.slot-win-lines span {
+  border: 1px solid rgba(246, 217, 143, 0.32);
+  border-radius: 999px;
+  padding: 0.35rem 0.65rem;
+  background: rgba(0, 0, 0, 0.22);
+  color: #f6d98f;
+  font-size: 0.82rem;
+  font-weight: 800;
 }
 
 .slot-console {
