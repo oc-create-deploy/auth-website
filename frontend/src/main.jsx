@@ -301,8 +301,14 @@ function App() {
 
   async function deposit(event) {
     event.preventDefault();
+    const checkoutWindow = window.open('', '_blank');
     setDepositing(true);
     setMessage('');
+
+    if (checkoutWindow) {
+      checkoutWindow.document.title = 'Opening checkout';
+      checkoutWindow.document.body.innerHTML = '<p style="font-family: system-ui; padding: 24px;">Opening secure checkout...</p>';
+    }
 
     try {
       const data = await apiRequest('/api/deposits', {
@@ -315,13 +321,22 @@ function App() {
       setMessage(
         data.deposit.status === 'confirmed'
           ? `${formatMoney(data.deposit.amountCents)} deposited.`
-          : 'Cloakd checkout created. Complete the provider payment to fund your balance.'
+          : 'Checkout created. Complete payment to fund your balance.'
       );
 
       if (data.deposit.checkoutUrl) {
-        window.open(data.deposit.checkoutUrl, '_blank', 'noopener,noreferrer');
+        if (checkoutWindow) {
+          checkoutWindow.location.href = data.deposit.checkoutUrl;
+        } else {
+          window.location.assign(data.deposit.checkoutUrl);
+        }
+      } else if (checkoutWindow) {
+        checkoutWindow.close();
       }
     } catch (error) {
+      if (checkoutWindow) {
+        checkoutWindow.close();
+      }
       setMessage(error.message);
     } finally {
       setDepositing(false);
@@ -386,10 +401,10 @@ function App() {
       <header className="site-header">
         <div className="container header-inner">
           <div className="brand-mark">
-            <span>CU</span>
+            <img src="/logo.svg" alt="CasUSDT.com" />
             <div>
               <strong>CasUSDT.com</strong>
-              <small>Private cashier</small>
+              <small>Casino USDT</small>
             </div>
           </div>
 
