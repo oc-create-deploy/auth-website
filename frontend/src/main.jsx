@@ -64,23 +64,23 @@ function App() {
         <div className="row min-vh-100 align-items-center g-4 py-4">
           <div className="col-lg-6">
             <div className="intro pe-lg-5">
-              <span className="badge text-bg-light mb-3">Secure starter</span>
-              <h1>Email authentication for web apps</h1>
+              <span className="eyebrow mb-3">Private access</span>
+              <h1>Members-only authentication</h1>
               <p>
-                A responsive login and registration flow backed by Express and MySQL, ready to run locally with Docker.
+                A refined login and registration experience for exclusive digital products, backed by Express and MySQL.
               </p>
               <div className="status-grid">
                 <div>
                   <strong>Frontend</strong>
-                  <span>React + Bootstrap</span>
+                  <span>Tailored interface</span>
                 </div>
                 <div>
                   <strong>Backend</strong>
-                  <span>Node.js + Express</span>
+                  <span>Secure API</span>
                 </div>
                 <div>
                   <strong>Database</strong>
-                  <span>MySQL</span>
+                  <span>Private records</span>
                 </div>
               </div>
             </div>
