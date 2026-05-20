@@ -16,7 +16,7 @@ const jwtSecret = process.env.JWT_SECRET || 'local-dev-secret-change-me';
 const defaultCurrency = 'USD';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const vendorGameRoot = path.resolve(__dirname, '../vendor-games/pragmatic-dragon');
-const vendorGameAssetVersion = 'casusdt-local43';
+const vendorGameAssetVersion = 'casusdt-local44';
 const vendorGameInitPath = path.join(vendorGameRoot, 'gs2c/ge/v5/gameService.html');
 const vendorGameInitResponse = fs.existsSync(vendorGameInitPath)
   ? fs.readFileSync(vendorGameInitPath, 'utf8')
@@ -182,6 +182,33 @@ function vendorGameResponse(params) {
   });
 
   return response;
+}
+
+function randomVendorSymbols(length) {
+  const symbols = '123456789a';
+  let result = '';
+
+  for (let index = 0; index < length; index += 1) {
+    result += symbols[Math.floor(Math.random() * symbols.length)];
+  }
+
+  return result;
+}
+
+function vendorGameSpinParams() {
+  const reelWidth = Number(vendorGameInitParams.get('sw') || 6);
+  const reelHeight = Number(vendorGameInitParams.get('sh') || 7);
+  const symbolCount = Math.max(1, reelWidth * reelHeight);
+
+  return {
+    s: randomVendorSymbols(symbolCount),
+    sa: randomVendorSymbols(reelWidth),
+    sb: randomVendorSymbols(reelWidth),
+    rs_p: '0',
+    tw: '0.00',
+    w: '0.00',
+    na: 's'
+  };
 }
 
 function parseDepositAmount(value) {
@@ -691,7 +718,9 @@ app.all('/api/admin/vendor-game/gs2c/ge/v5/gameService', async (req, res) => {
       sb: vendorGameInitParams.get('def_sb') || vendorGameInitParams.get('sb') || ''
     };
 
-    res.type('text/plain').send(vendorGameResponse(base));
+    res.type('text/plain').send(vendorGameResponse(action === 'doSpin'
+      ? { ...base, ...vendorGameSpinParams() }
+      : base));
   } catch (error) {
     console.error(error);
     res.status(500).send('Could not simulate vendor game response.');
