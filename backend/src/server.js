@@ -16,7 +16,7 @@ const jwtSecret = process.env.JWT_SECRET || 'local-dev-secret-change-me';
 const defaultCurrency = 'USD';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const vendorGameRoot = path.resolve(__dirname, '../vendor-games/pragmatic-dragon');
-const vendorGameAssetVersion = 'casusdt-local14';
+const vendorGameAssetVersion = 'casusdt-local38';
 const vendorGameInitPath = path.join(vendorGameRoot, 'gs2c/ge/v5/gameService.html');
 const vendorGameInitResponse = fs.existsSync(vendorGameInitPath)
   ? fs.readFileSync(vendorGameInitPath, 'utf8')
@@ -735,16 +735,20 @@ app.all('/api/admin/vendor-game/gs2c/logout.do', (_req, res) => {
   res.type('text/plain').send('OK');
 });
 
+app.get(/^\/api\/admin\/vendor-game\/.*\.(?:ogg|mp3)\.json$/, (_req, res) => {
+  res.type('application/json').send('{"resources":[]}');
+});
+
 app.use('/api/admin/vendor-game', express.static(vendorGameRoot, {
   etag: false,
   fallthrough: false,
   lastModified: false,
   maxAge: 0,
   setHeaders: (res) => {
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-    res.setHeader('Surrogate-Control', 'no-store');
+    res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
+    res.removeHeader('Pragma');
+    res.removeHeader('Expires');
+    res.removeHeader('Surrogate-Control');
   }
 }));
 
