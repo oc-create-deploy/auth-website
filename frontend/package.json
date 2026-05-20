@@ -11,9 +11,9 @@
   "dependencies": {
     "@vitejs/plugin-react": "^4.3.4",
     "bootstrap": "^5.3.3",
-    "vite": "^6.0.7",
+    "posthog-js": "^1.374.2",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
-  },
-  "devDependencies": {}
+    "react-dom": "^19.0.0",
+    "vite": "^6.0.7"
+  }
 }

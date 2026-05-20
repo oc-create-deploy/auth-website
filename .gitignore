@@ -4,4 +4,6 @@ dist
 .env.local
 mysql-data
 npm-debug.log*
-
+tmp-upload
+vendor-slot-archive
+vendor-slot-unpacked

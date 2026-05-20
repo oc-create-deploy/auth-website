@@ -1,10 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import posthog from 'posthog-js';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './styles.css';
 
 const apiUrl = import.meta.env.VITE_API_URL || '';
+const posthogToken = import.meta.env.VITE_POSTHOG_TOKEN || 'phc_sq47GnfuMyvFcr97EtF6uHXzsLjzDPoeMZSrs6Bfu9bC';
+const posthogHost = import.meta.env.VITE_POSTHOG_HOST || 'https://us.i.posthog.com';
+const aztecGoldGameCode = 'megajack/aztecgold';
 const slotSymbols = ['7', 'BAR', '$', 'A', 'K', 'Q', 'J', '10', '9', '8', 'WILD', 'BONUS'];
+const aztecSlotSymbols = ['MASK', 'SUN', 'TEMPLE', 'JADE', 'JAGUAR', 'EAGLE', 'A', 'K', 'Q', 'J', 'WILD', 'SCATTER'];
 const defaultReels = [
   [{ icon: '7' }, { icon: 'BAR' }, { icon: '$' }],
   [{ icon: 'A' }, { icon: '7' }, { icon: 'K' }],
@@ -46,6 +51,23 @@ const paylinePatterns = [
   [1, 0, 1, 0, 1]
 ];
 
+if (posthogToken) {
+  posthog.init(posthogToken, {
+    api_host: posthogHost,
+    capture_pageview: false,
+    autocapture: true,
+    person_profiles: 'identified_only'
+  });
+}
+
+function trackEvent(eventName, properties = {}) {
+  if (!posthogToken) {
+    return;
+  }
+
+  posthog.capture(eventName, properties);
+}
+
 function formatMoney(cents = 0) {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -74,19 +96,49 @@ function slotSymbolIcon(symbol) {
   return symbolMap[raw] || raw;
 }
 
-function randomSlotSymbol() {
-  return { icon: slotSymbols[Math.floor(Math.random() * slotSymbols.length)] };
+function randomSlotSymbol(symbolPool = slotSymbols) {
+  return { icon: symbolPool[Math.floor(Math.random() * symbolPool.length)] };
 }
 
-function buildAnimatedReels() {
-  return Array.from({ length: 5 }, () => Array.from({ length: 18 }, randomSlotSymbol));
+function buildAnimatedReels(symbolPool = slotSymbols) {
+  return Array.from({ length: 5 }, () => Array.from({ length: 18 }, () => randomSlotSymbol(symbolPool)));
 }
 
-function buildSettlingReels(finalReels) {
+function buildSettlingReels(finalReels, symbolPool = slotSymbols) {
   return finalReels.map((reel) => [
     ...reel,
-    ...Array.from({ length: 15 }, randomSlotSymbol)
+    ...Array.from({ length: 15 }, () => randomSlotSymbol(symbolPool))
   ]);
+}
+
+function aztecSymbol(symbol) {
+  const raw = String(symbol?.icon || symbol?.id || '').toUpperCase();
+  const symbolMap = {
+    1: { label: 'MASK', glyph: 'MASK', tone: 'turquoise' },
+    2: { label: 'SUN', glyph: 'SUN', tone: 'gold' },
+    3: { label: 'TEMPLE', glyph: 'PYR', tone: 'stone' },
+    4: { label: 'JADE', glyph: 'JADE', tone: 'green' },
+    5: { label: 'JAGUAR', glyph: 'JAG', tone: 'amber' },
+    6: { label: 'EAGLE', glyph: 'EGL', tone: 'red' },
+    7: { label: 'A', glyph: 'A', tone: 'card' },
+    8: { label: 'K', glyph: 'K', tone: 'card' },
+    9: { label: 'Q', glyph: 'Q', tone: 'card' },
+    10: { label: 'J', glyph: 'J', tone: 'card' },
+    11: { label: 'WILD', glyph: 'WILD', tone: 'wild' },
+    12: { label: 'SCATTER', glyph: 'SCAT', tone: 'scatter' },
+    13: { label: 'BONUS', glyph: 'BONUS', tone: 'gold' },
+    MASK: { label: 'MASK', glyph: 'MASK', tone: 'turquoise' },
+    SUN: { label: 'SUN', glyph: 'SUN', tone: 'gold' },
+    TEMPLE: { label: 'TEMPLE', glyph: 'PYR', tone: 'stone' },
+    JADE: { label: 'JADE', glyph: 'JADE', tone: 'green' },
+    JAGUAR: { label: 'JAGUAR', glyph: 'JAG', tone: 'amber' },
+    EAGLE: { label: 'EAGLE', glyph: 'EGL', tone: 'red' },
+    WILD: { label: 'WILD', glyph: 'WILD', tone: 'wild' },
+    SCATTER: { label: 'SCATTER', glyph: 'SCAT', tone: 'scatter' },
+    BONUS: { label: 'BONUS', glyph: 'BONUS', tone: 'gold' }
+  };
+
+  return symbolMap[raw] || { label: raw, glyph: raw, tone: 'card' };
 }
 
 function winningLineNumber(line) {
@@ -96,19 +148,6 @@ function winningLineNumber(line) {
 
 function linePattern(line) {
   return paylinePatterns[(winningLineNumber(line) - 1) % paylinePatterns.length];
-}
-
-function linePoints(line) {
-  const xPositions = [10, 30, 50, 70, 90];
-  const yPositions = [17, 50, 83];
-
-  return linePattern(line)
-    .map((rowIndex, reelIndex) => `${xPositions[reelIndex]},${yPositions[rowIndex]}`)
-    .join(' ');
-}
-
-function formatWinningLine(line) {
-  return `Line ${winningLineNumber(line)}: ${formatMoney(line.amountCents)}`;
 }
 
 function App() {
@@ -121,6 +160,8 @@ function App() {
   const [user, setUser] = useState(null);
   const [deposits, setDeposits] = useState([]);
   const [slotSession, setSlotSession] = useState(null);
+  const [slotGames, setSlotGames] = useState([]);
+  const [selectedSlotGameCode, setSelectedSlotGameCode] = useState('ctinteractive/luckydollar');
   const [slotHistory, setSlotHistory] = useState([]);
   const [slotBet, setSlotBet] = useState('1');
   const [slotResult, setSlotResult] = useState(null);
@@ -128,6 +169,7 @@ function App() {
   const [slotSpinPhase, setSlotSpinPhase] = useState('idle');
   const [adminUsers, setAdminUsers] = useState([]);
   const [selectedAdminUserId, setSelectedAdminUserId] = useState('');
+  const [selectedAdminSlotGameCode, setSelectedAdminSlotGameCode] = useState('ctinteractive/luckydollar');
   const [adminUserForm, setAdminUserForm] = useState({
     email: '',
     fullName: '',
@@ -137,6 +179,7 @@ function App() {
     password: ''
   });
   const [slotConfig, setSlotConfig] = useState(null);
+  const [vendorGame, setVendorGame] = useState(null);
   const [slotConfigForm, setSlotConfigForm] = useState({
     title: '',
     rtpPercent: '96',
@@ -148,13 +191,34 @@ function App() {
   const [depositing, setDepositing] = useState(false);
   const [spinning, setSpinning] = useState(false);
   const [adminSaving, setAdminSaving] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const emailInputRef = useRef(null);
 
   const token = localStorage.getItem('authToken');
   const title = mode === 'login' ? 'Login' : 'Registration';
   const submitLabel = mode === 'login' ? 'Sign in' : 'Register';
   const selectedAdminUser = adminUsers.find((item) => String(item.id) === selectedAdminUserId);
-  const games = [
+  const selectedAdminSlotGame = slotGames.find((game) => game.code === selectedAdminSlotGameCode);
+  const isAztecGold = selectedSlotGameCode === aztecGoldGameCode || slotSession?.code === aztecGoldGameCode;
+  const activeSymbolPool = isAztecGold ? aztecSlotSymbols : slotSymbols;
+  const winningCellKeys = useMemo(() => {
+    const keys = new Set();
+
+    if (spinning || !slotResult?.winningLines?.length) {
+      return keys;
+    }
+
+    slotResult.winningLines.forEach((line) => {
+      linePattern(line).forEach((rowIndex, reelIndex) => {
+        if (rowIndex >= 0 && rowIndex < 3) {
+          keys.add(`${reelIndex}-${rowIndex}`);
+        }
+      });
+    });
+
+    return keys;
+  }, [spinning, slotResult]);
+  const games = slotGames.length > 0 ? slotGames : [
     {
       code: 'ctinteractive/luckydollar',
       title: slotSession?.title || 'Lucky Dollar',
@@ -163,6 +227,8 @@ function App() {
       status: slotSession?.enabled === false ? 'Disabled' : 'Available'
     }
   ];
+  const visibleGames = games.filter((game) => game.enabled !== false);
+  const isSelectedSlotDisabled = slotSession?.enabled === false;
 
   const passwordHint = useMemo(() => {
     if (mode === 'login') {
@@ -171,6 +237,21 @@ function App() {
 
     return password.length >= 8 ? 'Password length looks good.' : 'Use at least 8 characters.';
   }, [mode, password]);
+
+  useEffect(() => {
+    trackEvent('$pageview', { view: user ? activeView : mode });
+  }, [activeView, mode, user]);
+
+  useEffect(() => {
+    if (user) {
+      posthog.identify(String(user.id), {
+        email: user.email,
+        isAdmin: Boolean(user.isAdmin)
+      });
+    } else {
+      posthog.reset();
+    }
+  }, [user]);
 
   useEffect(() => {
     async function restoreSession() {
@@ -182,6 +263,7 @@ function App() {
         const response = await apiRequest('/api/me');
         setUser(response.user);
         await loadDeposits();
+        await loadSlotGames();
         await loadSlotSession();
         await loadSlotHistory();
         if (response.user?.isAdmin) {
@@ -238,9 +320,15 @@ function App() {
     setDeposits(data.deposits || []);
   }
 
-  async function loadSlotSession() {
-    const data = await slotRequest('/slots/session');
+  async function loadSlotGames() {
+    const data = await slotRequest('/slots/games');
+    setSlotGames(data.games || []);
+  }
+
+  async function loadSlotSession(gameCode = selectedSlotGameCode) {
+    const data = await slotRequest(`/slots/session?gameCode=${encodeURIComponent(gameCode)}`);
     setSlotSession(data.game);
+    setSelectedSlotGameCode(data.game?.code || gameCode);
     setUser(data.user);
   }
 
@@ -252,22 +340,54 @@ function App() {
   async function loadAdminData() {
     const [usersData, slotConfigData] = await Promise.all([
       apiRequest('/api/admin/users'),
-      slotRequest('/admin/slot-config')
+      slotRequest(`/admin/slot-config?gameCode=${encodeURIComponent(selectedAdminSlotGameCode)}`)
     ]);
 
     setAdminUsers(usersData.users || []);
-    setSlotConfig(slotConfigData.config);
-    setSlotConfigForm({
-      title: slotConfigData.config?.title || 'Lucky Dollar',
-      rtpPercent: String(slotConfigData.config?.rtpPercent ?? 96),
-      minBet: String(slotConfigData.config?.minBet ?? 1),
-      maxBet: String(slotConfigData.config?.maxBet ?? 1000),
-      enabled: Boolean(slotConfigData.config?.enabled)
-    });
+    if (slotConfigData.games?.length) {
+      setSlotGames(slotConfigData.games.map((game) => ({
+        ...game,
+        ...game.config,
+        status: game.config?.enabled === false ? 'Disabled' : 'Available'
+      })));
+    }
+    applySlotConfig(slotConfigData.config);
 
     const firstUser = usersData.users?.[0];
     if (firstUser) {
       selectAdminUser(firstUser);
+    }
+  }
+
+  function applySlotConfig(config) {
+    if (!config) {
+      return;
+    }
+
+    setSlotConfig(config);
+    setSelectedAdminSlotGameCode(config.gameCode);
+    setSlotConfigForm({
+      title: config.title || 'Lucky Dollar',
+      rtpPercent: String(config.rtpPercent ?? 96),
+      minBet: String(config.minBet ?? 1),
+      maxBet: String(config.maxBet ?? 1000),
+      enabled: Boolean(config.enabled)
+    });
+  }
+
+  function selectAdminSlotGame(gameCode) {
+    const nextGame = slotGames.find((game) => game.code === gameCode);
+    setSelectedAdminSlotGameCode(gameCode);
+
+    if (nextGame) {
+      applySlotConfig({
+        gameCode: nextGame.code,
+        title: nextGame.title,
+        rtpPercent: nextGame.rtpPercent ?? nextGame.config?.rtpPercent ?? 96,
+        minBet: nextGame.minBet ?? nextGame.config?.minBet ?? 1,
+        maxBet: nextGame.maxBet ?? nextGame.config?.maxBet ?? 1000,
+        enabled: nextGame.enabled ?? nextGame.config?.enabled ?? true
+      });
     }
   }
 
@@ -331,19 +451,52 @@ function App() {
     try {
       const data = await slotRequest('/admin/slot-config', {
         method: 'PATCH',
-        body: JSON.stringify(slotConfigForm)
+        body: JSON.stringify({
+          ...slotConfigForm,
+          gameCode: selectedAdminSlotGameCode
+        })
       });
 
-      setSlotConfig(data.config);
+      applySlotConfig(data.config);
+      setSlotGames((current) => current.map((game) => (
+        game.code === data.config.gameCode
+          ? {
+            ...game,
+            ...data.config,
+            status: data.config.enabled ? 'Available' : 'Disabled'
+          }
+          : game
+      )));
       setSlotSession((current) => current ? {
         ...current,
-        title: data.config.title,
-        minBet: data.config.minBet,
-        maxBet: data.config.maxBet,
-        enabled: data.config.enabled,
+        ...(current.code === data.config.gameCode ? {
+          title: data.config.title,
+          minBet: data.config.minBet,
+          maxBet: data.config.maxBet,
+          enabled: data.config.enabled
+        } : {}),
         slotopolStatus: data.slotopolStatus
       } : current);
       setMessage('Slot configuration saved.');
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setAdminSaving(false);
+    }
+  }
+
+  async function openVendorGameDemo() {
+    setAdminSaving(true);
+    setMessage('');
+
+    try {
+      const data = await apiRequest('/api/admin/vendor-game/session', {
+        method: 'POST'
+      });
+      setVendorGame(data);
+      trackEvent('admin_vendor_game_opened', {
+        symbol: data.symbol
+      });
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -364,15 +517,23 @@ function App() {
 
       localStorage.setItem('authToken', data.token);
       setUser(data.user);
+      trackEvent(mode === 'login' ? 'login_succeeded' : 'registration_succeeded', {
+        userId: data.user?.id,
+        isAdmin: Boolean(data.user?.isAdmin)
+      });
       setMessage(mode === 'login' ? 'Welcome back.' : 'Membership profile created.');
       setPassword('');
       await loadDeposits();
+      await loadSlotGames();
       await loadSlotSession();
       await loadSlotHistory();
       if (data.user?.isAdmin) {
         await loadAdminData();
       }
     } catch (error) {
+      trackEvent(mode === 'login' ? 'login_failed' : 'registration_failed', {
+        reason: error.message
+      });
       setMessage(error.message);
     } finally {
       setLoading(false);
@@ -398,6 +559,13 @@ function App() {
 
       setUser(data.user);
       setDeposits((current) => [data.deposit, ...current].slice(0, 10));
+      trackEvent('deposit_created', {
+        depositId: data.deposit.id,
+        amountCents: data.deposit.amountCents,
+        currency: data.deposit.currency,
+        status: data.deposit.status,
+        hasCheckoutUrl: Boolean(data.deposit.checkoutUrl)
+      });
       setMessage(
         data.deposit.status === 'confirmed'
           ? `${formatMoney(data.deposit.amountCents)} deposited.`
@@ -417,6 +585,10 @@ function App() {
       if (checkoutWindow) {
         checkoutWindow.close();
       }
+      trackEvent('deposit_failed', {
+        reason: error.message,
+        amount
+      });
       setMessage(error.message);
     } finally {
       setDepositing(false);
@@ -426,22 +598,31 @@ function App() {
   async function spinSlot() {
     setSpinning(true);
     setSlotSpinPhase('rolling');
-    setAnimatedReels(buildAnimatedReels());
+    setAnimatedReels(buildAnimatedReels(activeSymbolPool));
     setMessage('');
 
     try {
       const spinRequest = slotRequest('/slots/spin', {
         method: 'POST',
-        body: JSON.stringify({ bet: slotBet })
+        body: JSON.stringify({ bet: slotBet, gameCode: selectedSlotGameCode })
       });
       const data = await spinRequest;
 
       setSlotSpinPhase('settling');
-      setAnimatedReels(buildSettlingReels(data.result.reels || defaultReels));
+      setAnimatedReels(buildSettlingReels(data.result.reels || defaultReels, activeSymbolPool));
       await new Promise((resolve) => setTimeout(resolve, spinAnimationMs));
 
       setUser(data.user);
       setSlotResult(data.result);
+      trackEvent('slot_spin_completed', {
+        gameCode: data.result.gameCode,
+        gameTitle: data.result.gameTitle,
+        betCents: data.result.betCents,
+        winCents: data.result.winCents,
+        netCents: data.result.netCents,
+        winningLineCount: data.result.winningLines?.length || 0,
+        slotopolStatus: data.result.slotopolStatus
+      });
       setAnimatedReels(null);
       setSlotSpinPhase('idle');
       await loadSlotHistory();
@@ -453,15 +634,38 @@ function App() {
     } catch (error) {
       setAnimatedReels(null);
       setSlotSpinPhase('idle');
+      trackEvent('slot_spin_failed', {
+        gameCode: selectedSlotGameCode,
+        reason: error.message
+      });
       setMessage(error.message);
     } finally {
       setSpinning(false);
     }
   }
 
-  function openSlotGame() {
+  async function openSlotGame(game) {
+    if (game.enabled === false) {
+      setMessage('This slot is currently disabled.');
+      return;
+    }
+
     setActiveView('slot');
+    setSelectedSlotGameCode(game.code);
+    setSlotResult(null);
     setMessage('');
+    trackEvent('slot_game_selected', {
+      gameCode: game.code,
+      title: game.title,
+      provider: game.provider,
+      lines: game.lines
+    });
+    try {
+      await loadSlotSession(game.code);
+    } catch (error) {
+      setMessage(error.message);
+      setActiveView('games');
+    }
   }
 
   function switchAuthMode(nextMode) {
@@ -474,14 +678,19 @@ function App() {
   }
 
   function logout() {
+    trackEvent('logout');
+    setShowLogoutConfirm(false);
     localStorage.removeItem('authToken');
     setUser(null);
     setDeposits([]);
     setSlotSession(null);
+    setSlotGames([]);
+    setSelectedSlotGameCode('ctinteractive/luckydollar');
     setSlotHistory([]);
     setSlotResult(null);
     setAdminUsers([]);
     setSelectedAdminUserId('');
+    setSelectedAdminSlotGameCode('ctinteractive/luckydollar');
     setSlotConfig(null);
     setPassword('');
     setMessage('Signed out.');
@@ -511,7 +720,7 @@ function App() {
                     <span>Admin</span>
                   </div>
                 )}
-                <button type="button" className="btn btn-outline-primary btn-sm" onClick={logout}>
+                <button type="button" className="btn btn-outline-primary btn-sm" onClick={() => setShowLogoutConfirm(true)}>
                   Logout
                 </button>
               </>
@@ -539,6 +748,29 @@ function App() {
         </div>
       </header>
 
+      {showLogoutConfirm && (
+        <div className="confirm-backdrop" role="presentation" onClick={() => setShowLogoutConfirm(false)}>
+          <div
+            className="confirm-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="logoutConfirmTitle"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="logoutConfirmTitle">Log out?</h2>
+            <p>You will need to sign in again to access cashier and games.</p>
+            <div className="confirm-actions">
+              <button type="button" className="btn btn-outline-primary btn-sm" onClick={() => setShowLogoutConfirm(false)}>
+                Cancel
+              </button>
+              <button type="button" className="btn btn-primary btn-sm" onClick={logout}>
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <section className="auth-shell container">
         <div className="app-stage">
           {user ? (
@@ -560,6 +792,16 @@ function App() {
                   <span>Games</span>
                   <small>Slots catalogue</small>
                 </button>
+                {user.isAdmin && (
+                  <button
+                    type="button"
+                    className={activeView === 'admin' ? 'active' : ''}
+                    onClick={() => setActiveView('admin')}
+                  >
+                    <span>Admin panel</span>
+                    <small>Operations control</small>
+                  </button>
+                )}
               </aside>
 
               <div className="player-grid">
@@ -643,54 +885,94 @@ function App() {
                   </div>
 
                   <div className="games-grid">
-                    {games.map((game) => (
-                      <button key={game.code} type="button" className="game-tile" onClick={openSlotGame}>
+                    {visibleGames.map((game) => {
+                      const disabled = game.enabled === false;
+
+                      return (
+                      <button
+                        key={game.code}
+                        type="button"
+                        className={`game-tile ${disabled ? 'is-disabled' : ''}`}
+                        disabled={disabled}
+                        onClick={() => openSlotGame(game)}
+                      >
                         <strong>{game.title}</strong>
-                        <small>{game.lines} lines · {game.status}</small>
-                        <span className="btn btn-primary btn-sm">Open game</span>
+                        <small>{game.provider} · {game.lines} lines · {game.status}</small>
+                        <span className="btn btn-primary btn-sm">{disabled ? 'Disabled' : 'Open game'}</span>
                       </button>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
 
               {activeView === 'slot' && (
               <div className="auth-card slot-card shadow-lg">
-                <div className="slot-cabinet">
+                <div className={`slot-cabinet ${isAztecGold ? 'aztec-cabinet' : ''}`}>
+                  {isAztecGold && (
+                    <div className="aztec-topper">
+                      <span>Megajack</span>
+                      <strong>Aztec Gold</strong>
+                      <small>{slotSession?.lines || 21} fixed lines</small>
+                    </div>
+                  )}
                   <div className="slot-marquee">
                     <span>{slotSession?.title || 'Lucky Dollar'}</span>
-                    <strong>{slotResult?.winCents > 0 ? `WIN ${formatMoney(slotResult.winCents)}` : '30 LINES'}</strong>
+                    <strong>{slotResult?.winCents > 0 ? `WIN ${formatMoney(slotResult.winCents)}` : `${slotSession?.lines || 30} LINES`}</strong>
+                    {isAztecGold && <small>Balance {formatMoney(user.balanceCents)}</small>}
                   </div>
 
-                  <div className="slot-screen">
-                    <div className="slot-payline" aria-hidden="true" />
-                    <div className="slot-machine" aria-label="Slot reels">
+                  <div className={`aztec-stage ${isAztecGold ? 'is-active' : ''}`}>
+                    {isAztecGold && (
+                      <aside className="aztec-paytable" aria-label="Aztec Gold high symbols">
+                        <span>Wild substitutes all symbols except scatter</span>
+                        <strong>WILD</strong>
+                        <strong>MASK</strong>
+                        <strong>SUN</strong>
+                        <strong>TEMPLE</strong>
+                      </aside>
+                    )}
+
+                  <div className={`slot-screen ${isAztecGold ? 'aztec-screen' : ''}`}>
+                    <div className={`slot-machine ${isAztecGold ? 'aztec-machine' : ''}`} aria-label="Slot reels">
                       {(animatedReels || slotResult?.reels || defaultReels).map((reel, reelIndex) => (
                         <div
-                          className={`slot-reel ${spinning ? `is-${slotSpinPhase}` : ''}`}
+                          className={`slot-reel ${isAztecGold ? 'aztec-reel' : ''} ${spinning ? `is-${slotSpinPhase}` : ''}`}
                           key={reelIndex}
                           style={spinning ? {
                             '--spin-duration': `${1700 + reelIndex * 160}ms`
                           } : undefined}
                         >
                           <div className="slot-reel-strip">
-                            {reel.map((symbol, rowIndex) => (
-                              <span key={`${reelIndex}-${rowIndex}-${symbol.icon}`}>{slotSymbolIcon(symbol)}</span>
-                            ))}
+                            {reel.map((symbol, rowIndex) => {
+                              const aztec = aztecSymbol(symbol);
+
+                              return (
+                                <span
+                                  className={[
+                                    winningCellKeys.has(`${reelIndex}-${rowIndex}`) ? 'is-winning-symbol' : '',
+                                    isAztecGold ? `aztec-symbol is-${aztec.tone}` : ''
+                                  ].filter(Boolean).join(' ')}
+                                  key={`${reelIndex}-${rowIndex}-${symbol.icon}`}
+                                  aria-label={isAztecGold ? aztec.label : slotSymbolIcon(symbol)}
+                                >
+                                  {isAztecGold ? <b>{aztec.glyph}</b> : slotSymbolIcon(symbol)}
+                                </span>
+                              );
+                            })}
                           </div>
                         </div>
                       ))}
-                      {!spinning && slotResult?.winningLines?.length > 0 && (
-                        <svg className="slot-line-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-                          {slotResult.winningLines.map((line, index) => (
-                            <g key={`${line.index}-${index}`} className="slot-line-group">
-                              <polyline points={linePoints(line)} />
-                              <text x="4" y={6 + index * 9}>{winningLineNumber(line)}</text>
-                            </g>
-                          ))}
-                        </svg>
-                      )}
                     </div>
+                  </div>
+                    {isAztecGold && (
+                      <aside className="aztec-paytable aztec-paytable-right" aria-label="Aztec Gold game status">
+                        <span>Connected to live balance</span>
+                        <strong>{formatMoney(slotBet * 100)}</strong>
+                        <strong>{slotResult?.winCents > 0 ? formatMoney(slotResult.winCents) : 'WIN $0.00'}</strong>
+                        <strong>{spinning ? 'SPINNING' : 'READY'}</strong>
+                      </aside>
+                    )}
                   </div>
 
                   <div className="slot-console">
@@ -714,20 +996,16 @@ function App() {
                         />
                       </div>
                     </div>
-                    <button className="slot-spin-button" type="button" disabled={spinning} onClick={spinSlot}>
-                      {spinning ? 'Spinning' : 'Spin'}
+                    <button className="slot-spin-button" type="button" disabled={spinning || isSelectedSlotDisabled} onClick={spinSlot}>
+                      {isSelectedSlotDisabled ? 'Disabled' : spinning ? 'Spinning' : 'Spin'}
                     </button>
                   </div>
                 </div>
 
-                {slotResult?.winningLines?.length > 0 && (
-                  <div className="slot-win-lines" aria-live="polite">
-                    <h3>Winning lines</h3>
-                    <div>
-                      {slotResult.winningLines.map((line, index) => (
-                        <span key={`${line.index}-${index}`}>{formatWinningLine(line)}</span>
-                      ))}
-                    </div>
+                {user.isAdmin && slotResult && (
+                  <div className="slot-raw-result" aria-live="polite">
+                    <h3>Raw spin result</h3>
+                    <pre>{JSON.stringify(slotResult, null, 2)}</pre>
                   </div>
                 )}
 
@@ -752,7 +1030,7 @@ function App() {
               </div>
               )}
 
-              {user.isAdmin && activeView === 'cashier' && (
+              {user.isAdmin && activeView === 'admin' && (
                 <div className="auth-card admin-card shadow-lg">
                   <div className="cashier-head">
                     <div>
@@ -876,6 +1154,21 @@ function App() {
                       </p>
                     </div>
                     <div className="row g-3">
+                      <div className="col-md-12">
+                        <label className="form-label" htmlFor="slotConfigGame">Game</label>
+                        <select
+                          id="slotConfigGame"
+                          className="form-control"
+                          value={selectedAdminSlotGameCode}
+                          onChange={(event) => selectAdminSlotGame(event.target.value)}
+                        >
+                          {slotGames.map((game) => (
+                            <option key={game.code} value={game.code}>
+                              {game.provider} / {game.title} ({game.lines} lines)
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                       <div className="col-md-3">
                         <label className="form-label" htmlFor="slotTitle">Game title</label>
                         <input
@@ -932,12 +1225,43 @@ function App() {
                         />
                         Game enabled
                       </label>
-                      <span>Current RTP {slotConfig ? `${slotConfig.rtpPercent}%` : 'loading'}</span>
+                      <span>
+                        {selectedAdminSlotGame ? `${selectedAdminSlotGame.provider} / ${selectedAdminSlotGame.title}` : 'Game loading'} · Current RTP {slotConfig ? `${slotConfig.rtpPercent}%` : 'loading'}
+                      </span>
                       <button className="btn btn-primary" type="submit" disabled={adminSaving}>
                         {adminSaving ? 'Saving...' : 'Save slot settings'}
                       </button>
                     </div>
                   </form>
+
+                  <section className="vendor-game-panel">
+                    <div className="vendor-game-head">
+                      <div>
+                        <h3>Uploaded slot demo</h3>
+                        <p className="text-secondary mb-0">
+                          Admin-only Pragmatic client from the split archive, served with a simulated local game service.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-outline-primary"
+                        onClick={openVendorGameDemo}
+                        disabled={adminSaving}
+                      >
+                        {vendorGame ? 'Reload demo' : 'Open demo'}
+                      </button>
+                    </div>
+
+                    {vendorGame && (
+                      <div className="vendor-game-frame">
+                        <iframe
+                          title={vendorGame.title}
+                          src={vendorGame.url}
+                          allow="autoplay; fullscreen"
+                        />
+                      </div>
+                    )}
+                  </section>
                 </div>
               )}
               </div>

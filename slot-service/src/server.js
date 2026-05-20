@@ -22,6 +22,8 @@ const slotopolFreeSpins = new Map();
 let slotopolAdminToken = null;
 let slotopolPlayerToken = null;
 let slotopolSyncedRtp = null;
+let slotopolGameCatalogCache = null;
+let slotopolGameCatalogCacheAt = 0;
 
 const pool = mysql.createPool({
   host: process.env.DB_HOST || 'localhost',
@@ -216,7 +218,56 @@ async function initializeDatabase() {
   `);
 }
 
-async function getGameConfig(gameCode = 'ctinteractive/luckydollar') {
+async function syncGameConfigs(games) {
+  const uniqueGames = [];
+  const seen = new Set();
+
+  for (const game of games || []) {
+    if (!game?.code || seen.has(game.code)) {
+      continue;
+    }
+
+    seen.add(game.code);
+    uniqueGames.push(game);
+  }
+
+  if (uniqueGames.length === 0) {
+    return new Map();
+  }
+
+  const placeholders = uniqueGames.map(() => '(?, ?, 96.00, 100, 100000, TRUE)').join(', ');
+  const values = uniqueGames.flatMap((game) => [game.code, game.title || game.code]);
+
+  await pool.execute(
+    `
+      INSERT INTO slot_game_configs (game_code, title, rtp_percent, min_bet_cents, max_bet_cents, enabled)
+      VALUES ${placeholders}
+      ON DUPLICATE KEY UPDATE game_code = game_code
+    `,
+    values
+  );
+
+  const [rows] = await pool.query(
+    `
+      SELECT game_code, title, rtp_percent, min_bet_cents, max_bet_cents, enabled, updated_at
+      FROM slot_game_configs
+      WHERE game_code IN (?)
+    `,
+    [uniqueGames.map((game) => game.code)]
+  );
+
+  return new Map(rows.map((row) => [row.game_code, row]));
+}
+
+async function getGameConfig(gameCode = 'ctinteractive/luckydollar', gameDefinition = null) {
+  const definition = gameDefinition || await getSlotopolGameDefinition(gameCode);
+  const configs = await syncGameConfigs([definition]);
+  const syncedConfig = configs.get(definition.code);
+
+  if (syncedConfig) {
+    return syncedConfig;
+  }
+
   const [rows] = await pool.execute(
     `
       SELECT game_code, title, rtp_percent, min_bet_cents, max_bet_cents, enabled, updated_at
@@ -240,6 +291,108 @@ function publicGameConfig(config) {
     enabled: Boolean(config.enabled),
     updatedAt: config.updated_at
   };
+}
+
+function parseEnabledFlag(value) {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  if (typeof value === 'number') {
+    return value === 1;
+  }
+
+  if (typeof value === 'string') {
+    return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
+  }
+
+  return false;
+}
+
+function slugPart(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
+}
+
+function gameCodeForAlias(alias) {
+  return `${slugPart(alias.prov)}/${slugPart(alias.name)}`;
+}
+
+function publicSlotopolGame(alias, algorithm) {
+  return {
+    code: gameCodeForAlias(alias),
+    alias: `${alias.prov}/${alias.name}`,
+    title: alias.name,
+    provider: alias.prov,
+    lines: Number(alias.lnum || algorithm.ln || algorithm.wn || 30),
+    reels: Number(algorithm.sx || 5),
+    rows: Number(algorithm.sy || 3),
+    rtp: Array.isArray(algorithm.rtp) ? algorithm.rtp.map(Number) : []
+  };
+}
+
+function defaultSlotopolGames() {
+  return [
+    {
+      code: 'ctinteractive/luckydollar',
+      alias: slotopolGameAlias,
+      title: 'Lucky Dollar',
+      provider: 'CT Interactive',
+      lines: slotopolLines,
+      reels: 5,
+      rows: 3,
+      rtp: []
+    }
+  ];
+}
+
+async function getSlotopolGames() {
+  const now = Date.now();
+
+  if (slotopolGameCatalogCache && now - slotopolGameCatalogCacheAt < 10 * 60 * 1000) {
+    return slotopolGameCatalogCache;
+  }
+
+  try {
+    const algorithms = await slotopolRequest('/game/algs', { timeoutMs: 8000 });
+    const seen = new Set();
+    const games = [];
+
+    for (const algorithm of algorithms || []) {
+      if (Number(algorithm.gt) !== 1 || Number(algorithm.sx) !== 5 || Number(algorithm.sy) !== 3) {
+        continue;
+      }
+
+      for (const alias of algorithm.aliases || []) {
+        if (!alias.prov || !alias.name) {
+          continue;
+        }
+
+        const game = publicSlotopolGame(alias, algorithm);
+
+        if (seen.has(game.code)) {
+          continue;
+        }
+
+        seen.add(game.code);
+        games.push(game);
+      }
+    }
+
+    games.sort((left, right) => left.provider.localeCompare(right.provider) || left.title.localeCompare(right.title));
+    slotopolGameCatalogCache = games.length ? games : defaultSlotopolGames();
+    slotopolGameCatalogCacheAt = now;
+    return slotopolGameCatalogCache;
+  } catch (error) {
+    console.error('Slotopol game catalog unavailable:', error.message);
+    return slotopolGameCatalogCache || defaultSlotopolGames();
+  }
+}
+
+async function getSlotopolGameDefinition(gameCode = 'ctinteractive/luckydollar') {
+  const games = await getSlotopolGames();
+  return games.find((game) => game.code === gameCode) || games.find((game) => game.code === 'ctinteractive/luckydollar') || games[0];
 }
 
 async function getSlotopolStatus() {
@@ -331,9 +484,10 @@ async function ensureSlotopolLiquidity(minWallet) {
   }).catch(() => null);
 }
 
-async function getSlotopolGame(userId) {
+async function getSlotopolGame(userId, gameDefinition) {
   const playerToken = await getSlotopolToken('player');
-  const cached = slotopolGameIds.get(userId);
+  const cacheKey = `${userId}:${gameDefinition.code}`;
+  const cached = slotopolGameIds.get(cacheKey);
 
   if (cached) {
     return { gid: cached, token: playerToken };
@@ -341,9 +495,9 @@ async function getSlotopolGame(userId) {
 
   const data = await slotopolRequest('/game/new', {
     token: playerToken,
-    body: { cid: slotopolClubId, uid: slotopolPlayerId, alias: slotopolGameAlias }
+    body: { cid: slotopolClubId, uid: slotopolPlayerId, alias: gameDefinition.alias }
   });
-  slotopolGameIds.set(userId, data.gid);
+  slotopolGameIds.set(cacheKey, data.gid);
   return { gid: data.gid, token: playerToken };
 }
 
@@ -355,33 +509,35 @@ function slotopolGridToReels(grid = []) {
   })));
 }
 
-async function spinSlotopol({ userId, betCents, rtpPercent }) {
+async function spinSlotopol({ userId, betCents, rtpPercent, gameDefinition }) {
   const totalStake = betCents / 100;
-  const lineBet = totalStake / slotopolLines;
-  const isFreeSpin = Number(slotopolFreeSpins.get(userId) || 0) > 0;
+  const lineCount = Number(gameDefinition.lines || slotopolLines || 30);
+  const lineBet = totalStake / lineCount;
+  const cacheKey = `${userId}:${gameDefinition.code}`;
+  const isFreeSpin = Number(slotopolFreeSpins.get(cacheKey) || 0) > 0;
 
   await syncSlotopolRtp(rtpPercent);
   await ensureSlotopolLiquidity(Math.max(1000, totalStake * 50));
 
-  let game = await getSlotopolGame(userId);
+  let game = await getSlotopolGame(userId, gameDefinition);
   try {
     const spin = await slotopolRequest('/slot/spin', {
       token: game.token,
       body: { gid: game.gid, bet: lineBet },
       timeoutMs: 8000
     });
-    slotopolFreeSpins.set(userId, Number(spin.game?.fsr || 0));
+    slotopolFreeSpins.set(cacheKey, Number(spin.game?.fsr || 0));
     return { ...spin, paidStakeCents: isFreeSpin ? 0 : betCents };
   } catch (error) {
-    slotopolGameIds.delete(userId);
-    slotopolFreeSpins.delete(userId);
-    game = await getSlotopolGame(userId);
+    slotopolGameIds.delete(cacheKey);
+    slotopolFreeSpins.delete(cacheKey);
+    game = await getSlotopolGame(userId, gameDefinition);
     const spin = await slotopolRequest('/slot/spin', {
       token: game.token,
       body: { gid: game.gid, bet: lineBet },
       timeoutMs: 8000
     });
-    slotopolFreeSpins.set(userId, Number(spin.game?.fsr || 0));
+    slotopolFreeSpins.set(cacheKey, Number(spin.game?.fsr || 0));
     return { ...spin, paidStakeCents: betCents };
   }
 }
@@ -390,13 +546,43 @@ app.get('/health', async (_req, res) => {
   res.json({ ok: true, slotopol: await getSlotopolStatus() });
 });
 
+app.get('/api/slots/games', requireUser, async (_req, res) => {
+  const games = await getSlotopolGames();
+  const configs = await syncGameConfigs(games);
+
+  const publicGames = games.map((game) => {
+      const config = configs.get(game.code);
+
+      return {
+        ...game,
+        title: config?.title || game.title,
+        minBet: Number(config?.min_bet_cents || 100) / 100,
+        maxBet: Number(config?.max_bet_cents || 100000) / 100,
+        rtpPercent: Number(config?.rtp_percent || 96),
+        enabled: config ? Boolean(config.enabled) : true,
+        status: !config || Boolean(config.enabled) ? 'Available' : 'Disabled'
+      };
+    }).filter((game) => game.enabled !== false);
+
+  res.json({
+    games: publicGames,
+    slotopolStatus: await getSlotopolStatus()
+  });
+});
+
 app.get('/api/slots/session', requireUser, async (req, res) => {
-  const config = await getGameConfig();
+  const gameDefinition = await getSlotopolGameDefinition(req.query.gameCode);
+  const config = await getGameConfig(gameDefinition.code, gameDefinition);
+
   res.json({
     game: {
-      code: config.game_code,
-      title: config.title,
-      lines: slotopolLines,
+      code: gameDefinition.code,
+      alias: gameDefinition.alias,
+      title: config.title || gameDefinition.title,
+      provider: gameDefinition.provider,
+      lines: gameDefinition.lines,
+      reels: gameDefinition.reels,
+      rows: gameDefinition.rows,
       minBet: Number(config.min_bet_cents) / 100,
       maxBet: Number(config.max_bet_cents) / 100,
       slotopolStatus: await getSlotopolStatus(),
@@ -407,16 +593,29 @@ app.get('/api/slots/session', requireUser, async (req, res) => {
 });
 
 app.get('/api/admin/slot-config', requireUser, requireAdmin, async (_req, res) => {
-  const config = await getGameConfig();
-  res.json({ config: publicGameConfig(config), slotopolStatus: await getSlotopolStatus() });
+  const games = await getSlotopolGames();
+  const configs = await syncGameConfigs(games);
+  const gameConfigs = games.map((game) => ({
+    ...game,
+    config: publicGameConfig(configs.get(game.code))
+  }));
+  const selectedGameCode = _req.query.gameCode || gameConfigs[0]?.code || 'ctinteractive/luckydollar';
+  const selected = gameConfigs.find((game) => game.code === selectedGameCode) || gameConfigs[0];
+
+  res.json({
+    config: selected?.config || publicGameConfig(await getGameConfig()),
+    games: gameConfigs,
+    slotopolStatus: await getSlotopolStatus()
+  });
 });
 
 app.patch('/api/admin/slot-config', requireUser, requireAdmin, async (req, res) => {
-  const title = String(req.body.title || '').trim() || 'Lucky Dollar';
+  const gameDefinition = await getSlotopolGameDefinition(req.body.gameCode);
+  const title = String(req.body.title || '').trim() || gameDefinition.title;
   const rtpPercent = Number(req.body.rtpPercent);
   const minBet = Number(req.body.minBet);
   const maxBet = Number(req.body.maxBet);
-  const enabled = Boolean(req.body.enabled);
+  const enabled = parseEnabledFlag(req.body.enabled);
 
   if (!Number.isFinite(rtpPercent) || rtpPercent < 50 || rtpPercent > 99.9) {
     return res.status(400).json({ message: 'RTP must be from 50 to 99.9 percent.' });
@@ -430,13 +629,13 @@ app.patch('/api/admin/slot-config', requireUser, requireAdmin, async (req, res) 
     `
       UPDATE slot_game_configs
       SET title = ?, rtp_percent = ?, min_bet_cents = ?, max_bet_cents = ?, enabled = ?
-      WHERE game_code = 'ctinteractive/luckydollar'
+      WHERE game_code = ?
     `,
-    [title, rtpPercent, Math.round(minBet * 100), Math.round(maxBet * 100), enabled ? 1 : 0]
+    [title, rtpPercent, Math.round(minBet * 100), Math.round(maxBet * 100), enabled ? 1 : 0, gameDefinition.code]
   );
   await syncSlotopolRtp(rtpPercent);
 
-  const config = await getGameConfig();
+  const config = await getGameConfig(gameDefinition.code, gameDefinition);
   res.json({ config: publicGameConfig(config), slotopolStatus: await getSlotopolStatus() });
 });
 
@@ -458,7 +657,8 @@ app.get('/api/slots/history', requireUser, async (req, res) => {
 
 app.post('/api/slots/spin', requireUser, async (req, res) => {
   const betCents = parseBet(req.body.bet);
-  const config = await getGameConfig();
+  const gameDefinition = await getSlotopolGameDefinition(req.body.gameCode);
+  const config = await getGameConfig(gameDefinition.code, gameDefinition);
 
   if (!betCents) {
     return res.status(400).json({ message: 'Enter a stake from 1 to 1,000.' });
@@ -498,7 +698,8 @@ app.post('/api/slots/spin', requireUser, async (req, res) => {
     const slotopolSpin = await spinSlotopol({
       userId: user.id,
       betCents,
-      rtpPercent: Number(config.rtp_percent)
+      rtpPercent: Number(config.rtp_percent),
+      gameDefinition
     });
     const slotopolStakeCents = Number(slotopolSpin.paidStakeCents || 0);
     const winCents = Math.max(0, Math.round(Number(slotopolSpin.game?.gain || 0) * 100));
@@ -521,7 +722,7 @@ app.post('/api/slots/spin', requireUser, async (req, res) => {
       `,
       [
         user.id,
-        'ctinteractive/luckydollar',
+        gameDefinition.code,
         betCents,
         outcome.winCents,
         balanceAfter,
@@ -533,7 +734,10 @@ app.post('/api/slots/spin', requireUser, async (req, res) => {
 
     res.json({
       result: {
-        gameCode: 'ctinteractive/luckydollar',
+        gameCode: gameDefinition.code,
+        gameTitle: gameDefinition.title,
+        gameAlias: gameDefinition.alias,
+        lines: gameDefinition.lines,
         betCents,
         winCents: outcome.winCents,
         netCents: outcome.winCents - slotopolStakeCents,

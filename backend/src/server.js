@@ -3,14 +3,25 @@ import bcrypt from 'bcryptjs';
 import cors from 'cors';
 import crypto from 'crypto';
 import express from 'express';
+import fs from 'fs';
 import helmet from 'helmet';
 import jwt from 'jsonwebtoken';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { initializeDatabase, pool } from './db.js';
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
 const jwtSecret = process.env.JWT_SECRET || 'local-dev-secret-change-me';
 const defaultCurrency = 'USD';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const vendorGameRoot = path.resolve(__dirname, '../vendor-games/pragmatic-dragon');
+const vendorGameAssetVersion = 'casusdt-local8';
+const vendorGameInitPath = path.join(vendorGameRoot, 'gs2c/ge/v5/gameService.html');
+const vendorGameInitResponse = fs.existsSync(vendorGameInitPath)
+  ? fs.readFileSync(vendorGameInitPath, 'utf8')
+  : '';
+const vendorGameInitParams = new URLSearchParams(vendorGameInitResponse);
 
 app.use(helmet());
 app.use(cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:5173' }));
@@ -19,6 +30,7 @@ app.use(express.json({
     req.rawBody = buffer;
   }
 }));
+app.use(express.urlencoded({ extended: false }));
 
 function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase();
@@ -92,6 +104,84 @@ function requireAdmin(req, res, next) {
   }
 
   next();
+}
+
+function parseCookies(header = '') {
+  return header.split(';').reduce((cookies, part) => {
+    const [name, ...rawValue] = part.trim().split('=');
+
+    if (name) {
+      cookies[name] = decodeURIComponent(rawValue.join('=') || '');
+    }
+
+    return cookies;
+  }, {});
+}
+
+function signVendorGameToken(user) {
+  return jwt.sign(
+    { sub: user.id, isAdmin: true, scope: 'vendor-game' },
+    jwtSecret,
+    { expiresIn: '30m' }
+  );
+}
+
+async function requireVendorGameAccess(req, res, next) {
+  const token = parseCookies(req.get('cookie') || '').vendorGameTicket || '';
+
+  if (!token) {
+    return res.status(401).send('Admin game session required.');
+  }
+
+  try {
+    const payload = jwt.verify(token, jwtSecret);
+
+    if (payload.scope !== 'vendor-game' || !payload.isAdmin) {
+      return res.status(403).send('Admin game access required.');
+    }
+
+    const [rows] = await pool.execute(
+      'SELECT id, email, balance_cents, is_admin, status FROM users WHERE id = ? LIMIT 1',
+      [payload.sub]
+    );
+
+    if (!rows[0] || !rows[0].is_admin || rows[0].status !== 'active') {
+      return res.status(403).send('Admin game access required.');
+    }
+
+    req.vendorGameUser = rows[0];
+    next();
+  } catch (_error) {
+    res.status(401).send('Admin game session expired.');
+  }
+}
+
+function formatGameBalance(cents = 0) {
+  return new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(Number(cents) / 100);
+}
+
+function replaceGameParam(response, key, value) {
+  const safeKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp('(^|&)' + safeKey + '=[^&]*');
+
+  if (pattern.test(response)) {
+    return response.replace(pattern, '$1' + key + '=' + value);
+  }
+
+  return response + '&' + key + '=' + value;
+}
+
+function vendorGameResponse(params) {
+  let response = vendorGameInitResponse;
+
+  Object.entries(params).forEach(([key, value]) => {
+    response = replaceGameParam(response, key, String(value));
+  });
+
+  return response;
 }
 
 function parseDepositAmount(value) {
@@ -523,6 +613,140 @@ app.patch('/api/admin/users/:id', requireUser, requireAdmin, async (req, res) =>
     res.status(500).json({ message: 'Could not update user.' });
   }
 });
+
+app.post('/api/admin/vendor-game/session', requireUser, requireAdmin, (req, res) => {
+  const token = signVendorGameToken(req.user);
+
+  res.cookie('vendorGameTicket', token, {
+    httpOnly: true,
+    sameSite: 'lax',
+    path: '/api/admin/vendor-game',
+    maxAge: 30 * 60 * 1000
+  });
+  res.json({
+    title: 'Dragon Pots Megaways demo',
+    symbol: 'vswaysdragden',
+    url: `/api/admin/vendor-game/gs2c/html5Game.do?v=${vendorGameAssetVersion}`
+  });
+});
+
+app.use('/api/admin/vendor-game', requireVendorGameAccess, (req, res, next) => {
+  res.removeHeader('Content-Security-Policy');
+  res.setHeader('Content-Security-Policy', [
+    "default-src 'self' data: blob:",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "media-src 'self' data: blob:",
+    "connect-src 'self'",
+    "frame-ancestors 'self'"
+  ].join('; '));
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.setHeader('Surrogate-Control', 'no-store');
+  next();
+});
+
+app.all('/api/admin/vendor-game/gs2c/ge/v5/gameService', async (req, res) => {
+  if (!vendorGameInitResponse) {
+    return res.status(503).send('Vendor game payload is not installed.');
+  }
+
+  const action = String(req.body.action || req.query.action || 'doInit');
+  const coin = Number(req.body.c || req.query.c || vendorGameInitParams.get('c') || '0.10');
+  const lines = Number(req.body.l || req.query.l || vendorGameInitParams.get('l') || '20');
+  const betCents = Math.max(0, Math.round(coin * lines * 100));
+
+  try {
+    if (action === 'doSpin' && betCents > 0) {
+      await pool.execute(
+        'UPDATE users SET balance_cents = GREATEST(balance_cents - ?, 0) WHERE id = ?',
+        [betCents, req.vendorGameUser.id]
+      );
+    }
+
+    const [rows] = await pool.execute(
+      'SELECT balance_cents FROM users WHERE id = ? LIMIT 1',
+      [req.vendorGameUser.id]
+    );
+    const balance = formatGameBalance(rows[0]?.balance_cents || 0);
+    const now = Date.now();
+    const base = {
+      action,
+      balance,
+      balance_cash: balance,
+      balance_bonus: '0.00',
+      c: coin.toFixed(2),
+      l: Number.isFinite(lines) ? lines : 20,
+      stime: now,
+      index: Math.floor(now / 1000),
+      counter: Math.floor(now / 500),
+      na: 's',
+      tw: '0.00',
+      w: '0.00',
+      rs_p: '0',
+      s: vendorGameInitParams.get('s') || vendorGameInitParams.get('def_s') || '',
+      sa: vendorGameInitParams.get('def_sa') || vendorGameInitParams.get('sa') || '',
+      sb: vendorGameInitParams.get('def_sb') || vendorGameInitParams.get('sb') || ''
+    };
+
+    res.type('text/plain').send(vendorGameResponse(base));
+  } catch (error) {
+    console.error(error);
+    res.status(500).send('Could not simulate vendor game response.');
+  }
+});
+
+app.get('/api/admin/vendor-game/gs2c/html5Game.do', (req, res) => {
+  res.type('html').sendFile(path.join(vendorGameRoot, 'gs2c/html5Game.do'));
+});
+
+app.all('/api/admin/vendor-game/gs2c/stats.do', (_req, res) => {
+  res.json({ error: 0, description: 'OK' });
+});
+
+app.all('/api/admin/vendor-game/gs2c/saveSettings.do', (_req, res) => {
+  res.json({
+    MinimizedNotificationTypes: '',
+    HideMetaNotifications: 'false'
+  });
+});
+
+app.all('/api/admin/vendor-game/gs2c/reloadBalance.do', async (req, res) => {
+  const [rows] = await pool.execute(
+    'SELECT balance_cents FROM users WHERE id = ? LIMIT 1',
+    [req.vendorGameUser.id]
+  );
+  const balance = formatGameBalance(rows[0]?.balance_cents || 0);
+
+  res.type('text/plain').send(`balance=${balance}&balance_cash=${balance}&balance_bonus=0.00&stime=${Date.now()}`);
+});
+
+app.all('/api/admin/vendor-game/gs2c/jackpot/reload.do', (_req, res) => {
+  res.json({ error: 0, jackpots: [] });
+});
+
+app.all('/api/admin/vendor-game/gs2c/closeGame.do', (_req, res) => {
+  res.type('text/plain').send('OK');
+});
+
+app.all('/api/admin/vendor-game/gs2c/logout.do', (_req, res) => {
+  res.type('text/plain').send('OK');
+});
+
+app.use('/api/admin/vendor-game', express.static(vendorGameRoot, {
+  etag: false,
+  fallthrough: false,
+  lastModified: false,
+  maxAge: 0,
+  setHeaders: (res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('Surrogate-Control', 'no-store');
+  }
+}));
 
 app.get('/api/deposits', requireUser, async (req, res) => {
   const [rows] = await pool.execute(
