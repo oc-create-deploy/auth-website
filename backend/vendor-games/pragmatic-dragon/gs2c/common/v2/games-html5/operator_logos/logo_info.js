@@ -121,7 +121,7 @@ UHTPatch({
 		{
 			oOnSoundsLoaded.apply(this, arguments);
 			if (SoundLoader.packagesDownloaded == SoundLoader.packageList.length)
-				SoundLoader.sounds = null;
+				SoundLoader.sounds = [];
 		};
 
 		var oOnTouchEnd = SoundLoader.OnTouchEnd;
@@ -36805,4 +36805,3 @@ window.unwatchProp = function(obj, prop) {
 	Object.defineProperty(obj, prop, { value: value, writable: true, configurable: true, enumerable: true });
 	console.log("unwatchProp: stopped watching '" + prop + "'");
 };
-

@@ -16,7 +16,7 @@ const jwtSecret = process.env.JWT_SECRET || 'local-dev-secret-change-me';
 const defaultCurrency = 'USD';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const vendorGameRoot = path.resolve(__dirname, '../vendor-games/pragmatic-dragon');
-const vendorGameAssetVersion = 'casusdt-local40';
+const vendorGameAssetVersion = 'casusdt-local41';
 const vendorGameInitPath = path.join(vendorGameRoot, 'gs2c/ge/v5/gameService.html');
 const vendorGameInitResponse = fs.existsSync(vendorGameInitPath)
   ? fs.readFileSync(vendorGameInitPath, 'utf8')
@@ -736,7 +736,7 @@ app.all('/api/admin/vendor-game/gs2c/logout.do', (_req, res) => {
 });
 
 app.get(/^\/api\/admin\/vendor-game\/.*\.(?:ogg|mp3)\.json$/, (_req, res) => {
-  res.type('application/json').send('{"resources":[]}');
+  res.type('application/json').send('{"sounds":[]}');
 });
 
 app.use('/api/admin/vendor-game', express.static(vendorGameRoot, {
