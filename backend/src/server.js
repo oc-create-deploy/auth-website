@@ -20,7 +20,7 @@ const vendorGameDesktopRoot = path.join(
   vendorGameRoot,
   'gs2c/common/v2/games-html5/games/vs/vswaysdragden/desktop'
 );
-const vendorGameAssetVersion = 'casusdt-local58';
+const vendorGameAssetVersion = 'casusdt-local59';
 const vendorGameInitPath = path.join(vendorGameRoot, 'gs2c/ge/v5/gameService.html');
 const vendorGameInitResponse = fs.existsSync(vendorGameInitPath)
   ? fs.readFileSync(vendorGameInitPath, 'utf8')
