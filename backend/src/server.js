@@ -20,7 +20,7 @@ const vendorGameDesktopRoot = path.join(
   vendorGameRoot,
   'gs2c/common/v2/games-html5/games/vs/vswaysdragden/desktop'
 );
-const vendorGameAssetVersion = 'casusdt-local49';
+const vendorGameAssetVersion = 'casusdt-local50';
 const vendorGameInitPath = path.join(vendorGameRoot, 'gs2c/ge/v5/gameService.html');
 const vendorGameInitResponse = fs.existsSync(vendorGameInitPath)
   ? fs.readFileSync(vendorGameInitPath, 'utf8')
@@ -768,8 +768,22 @@ app.all('/api/admin/vendor-game/gs2c/logout.do', (_req, res) => {
   res.type('text/plain').send('OK');
 });
 
-app.get(/^\/api\/admin\/vendor-game\/.*\.(?:ogg|mp3)\.json$/, (_req, res) => {
-  res.type('application/json').send('{"sounds":[]}');
+app.get(/^\/api\/admin\/vendor-game\/(.*\.(?:ogg|mp3)\.json)$/, (req, res, next) => {
+  const vendorAssetPath = path.resolve(vendorGameRoot, req.params[0] || '');
+
+  if (!vendorAssetPath.startsWith(`${vendorGameRoot}${path.sep}`)) {
+    return res.status(400).send('Invalid vendor game asset path.');
+  }
+
+  if (!fs.existsSync(vendorAssetPath)) {
+    return res.type('application/json').send('{"sounds":[]}');
+  }
+
+  res.sendFile(vendorAssetPath, (error) => {
+    if (error) {
+      next(error);
+    }
+  });
 });
 
 app.get('/api/admin/vendor-game/gs2c/common/v2/games-html5/games/vs/vswaysdragden/:build/packages/:packageFile', (req, res, next) => {
