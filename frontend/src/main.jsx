@@ -711,6 +711,21 @@ function App() {
     <main className="auth-page">
       <header className="site-header">
         <div className="container header-inner">
+          {user && (
+            <button
+              type="button"
+              className="menu-toggle"
+              aria-label="Open navigation"
+              aria-controls="memberNavigation"
+              aria-expanded={isNavigationOpen}
+              onClick={() => setIsNavigationOpen((isOpen) => !isOpen)}
+            >
+              <span aria-hidden="true"></span>
+              <span aria-hidden="true"></span>
+              <span aria-hidden="true"></span>
+            </button>
+          )}
+
           <div className="brand-mark">
             <img src="/logo.svg?v=20260519" alt="CasUSDT.com" />
             <div>
@@ -722,18 +737,6 @@ function App() {
           <div className="header-actions">
             {user ? (
               <>
-                <button
-                  type="button"
-                  className="menu-toggle"
-                  aria-label="Open navigation"
-                  aria-controls="memberNavigation"
-                  aria-expanded={isNavigationOpen}
-                  onClick={() => setIsNavigationOpen((isOpen) => !isOpen)}
-                >
-                  <span aria-hidden="true"></span>
-                  <span aria-hidden="true"></span>
-                  <span aria-hidden="true"></span>
-                </button>
                 <div className="balance-pill">
                   <span>Balance</span>
                   <strong>{formatMoney(user.balanceCents)}</strong>
