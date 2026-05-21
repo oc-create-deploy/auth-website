@@ -16,7 +16,11 @@ const jwtSecret = process.env.JWT_SECRET || 'local-dev-secret-change-me';
 const defaultCurrency = 'USD';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const vendorGameRoot = path.resolve(__dirname, '../vendor-games/pragmatic-dragon');
-const vendorGameAssetVersion = 'casusdt-local44';
+const vendorGameDesktopRoot = path.join(
+  vendorGameRoot,
+  'gs2c/common/v2/games-html5/games/vs/vswaysdragden/desktop'
+);
+const vendorGameAssetVersion = 'casusdt-local45';
 const vendorGameInitPath = path.join(vendorGameRoot, 'gs2c/ge/v5/gameService.html');
 const vendorGameInitResponse = fs.existsSync(vendorGameInitPath)
   ? fs.readFileSync(vendorGameInitPath, 'utf8')
@@ -766,6 +770,21 @@ app.all('/api/admin/vendor-game/gs2c/logout.do', (_req, res) => {
 
 app.get(/^\/api\/admin\/vendor-game\/.*\.(?:ogg|mp3)\.json$/, (_req, res) => {
   res.type('application/json').send('{"sounds":[]}');
+});
+
+app.get('/api/admin/vendor-game/gs2c/common/v2/games-html5/games/vs/vswaysdragden/mobile/*', (req, res, next) => {
+  const requestedAsset = req.params[0] || '';
+  const desktopAssetPath = path.resolve(vendorGameDesktopRoot, requestedAsset);
+
+  if (!desktopAssetPath.startsWith(`${vendorGameDesktopRoot}${path.sep}`)) {
+    return res.status(400).send('Invalid vendor game asset path.');
+  }
+
+  res.sendFile(desktopAssetPath, (error) => {
+    if (error) {
+      next(error);
+    }
+  });
 });
 
 app.use('/api/admin/vendor-game', express.static(vendorGameRoot, {
