@@ -26,6 +26,7 @@ const vendorGameInitResponse = fs.existsSync(vendorGameInitPath)
   ? fs.readFileSync(vendorGameInitPath, 'utf8')
   : '';
 const vendorGameInitParams = new URLSearchParams(vendorGameInitResponse);
+const vendorGameSessions = new Map();
 
 app.use(helmet());
 app.use(cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:5173' }));
@@ -213,6 +214,271 @@ function vendorGameSpinParams() {
     w: '0.00',
     na: 's'
   };
+}
+
+function formatGameAmount(cents = 0) {
+  return (Number(cents) / 100).toFixed(2);
+}
+
+function parseGameNumber(value, fallback = 0) {
+  const parsed = Number(String(value || '').replace(/,/g, ''));
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function encodeGameResponse(params) {
+  return Object.entries(params)
+    .filter(([, value]) => value !== undefined && value !== null)
+    .map(([key, value]) => `${key}=${String(value)}`)
+    .join('&');
+}
+
+function getVendorGameSession(userId) {
+  const existing = vendorGameSessions.get(userId);
+
+  if (existing) {
+    return existing;
+  }
+
+  const session = {
+    pendingWinCents: 0,
+    freeSpins: null
+  };
+  vendorGameSessions.set(userId, session);
+  return session;
+}
+
+function vendorGameBetConfig(rawCoin, rawBetLevel) {
+  const coin = Number.isFinite(rawCoin) && rawCoin > 0
+    ? rawCoin
+    : parseGameNumber(vendorGameInitParams.get('defc'), 0.10);
+  const betLevel = Number.isFinite(rawBetLevel) ? Math.max(0, Math.min(2, rawBetLevel)) : 0;
+  const linesByLevel = [20, 40, 200];
+  const lines = linesByLevel[betLevel] || linesByLevel[0];
+  const betCents = Math.max(1, Math.round(coin * lines * 100));
+
+  return {
+    coin,
+    coinText: coin.toFixed(2),
+    betLevel,
+    lines,
+    betCents
+  };
+}
+
+function vendorGamePurchaseCostCents(purchaseIndex, betCents) {
+  if (purchaseIndex === 0) {
+    return betCents * 100;
+  }
+
+  if (purchaseIndex === 1) {
+    return betCents * 650;
+  }
+
+  return 0;
+}
+
+function randomVendorVisibleSymbols(length) {
+  const symbols = '123456789a';
+  let result = '';
+
+  for (let index = 0; index < length; index += 1) {
+    const roll = Math.random();
+
+    if (roll < 0.12) {
+      result += 'O';
+    } else if (roll < 0.18) {
+      result += 'W';
+    } else {
+      result += symbols[Math.floor(Math.random() * symbols.length)];
+    }
+  }
+
+  return result;
+}
+
+function randomDragonPotsReels({ forceFeature = false } = {}) {
+  const reelWidth = Number(vendorGameInitParams.get('sw') || 6);
+  const reelHeight = Number(vendorGameInitParams.get('sh') || 7);
+  const symbolCount = Math.max(1, reelWidth * reelHeight);
+  let symbols = randomVendorVisibleSymbols(symbolCount).split('');
+
+  if (forceFeature) {
+    symbols[4] = 'T';
+    symbols[14] = 'V';
+    symbols[24] = 'U';
+  }
+
+  return symbols.join('');
+}
+
+function randomDragonPotsAccumulator(mode = 'base') {
+  if (mode === 'all') {
+    return '6~6;6~6;6~6';
+  }
+
+  if (mode === 'two') {
+    return '6~6;6~6;0~0';
+  }
+
+  return ['0~0;0~0;0~0', '1~1;0~0;0~0', '0~0;1~1;0~0'][Math.floor(Math.random() * 3)];
+}
+
+function randomWinCents(betCents, { feature = false } = {}) {
+  const roll = Math.random();
+
+  if (!feature && roll < 0.62) {
+    return 0;
+  }
+
+  const multipliers = feature
+    ? [0, 0, 1, 2, 4, 7, 10, 18, 30, 45]
+    : [0, 1, 2, 3, 5, 8, 12, 19];
+  const multiplier = multipliers[Math.floor(Math.random() * multipliers.length)];
+
+  return Math.round(betCents * multiplier * (feature ? 0.35 : 1));
+}
+
+function randomWinLine(winCents, bet) {
+  if (winCents <= 0) {
+    return undefined;
+  }
+
+  const amount = formatGameAmount(winCents);
+  const symbol = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'a'][Math.floor(Math.random() * 10)];
+  const ways = Math.max(1, Math.floor(winCents / Math.max(1, bet.betCents)));
+
+  return `${symbol}~${amount}~${ways}~${3 + Math.floor(Math.random() * 4)}~0,7,14,21~l`;
+}
+
+function baseVendorSpinResponse({ action = 'doSpin', balanceCents, bet, index, counter, winCents, nextAction = 's', ntpCents }) {
+  const winLine = randomWinLine(winCents, bet);
+  const symbols = randomDragonPotsReels();
+
+  return {
+    action,
+    tw: formatGameAmount(winCents),
+    balance: formatGameBalance(balanceCents),
+    balance_cash: formatGameBalance(balanceCents),
+    balance_bonus: '0.00',
+    index,
+    counter,
+    na: nextAction,
+    reel_set: String(Math.floor(Math.random() * 11)),
+    accm: 's1cp~s1cd;s2cp~s2cd;s3cp~s3cd',
+    acci: '0;1;2',
+    accv: randomDragonPotsAccumulator(),
+    bl: bet.betLevel,
+    stime: Date.now(),
+    sa: randomVendorSymbols(6),
+    sb: randomVendorSymbols(6),
+    sh: '7',
+    st: 'rect',
+    c: bet.coinText,
+    sw: '6',
+    sver: '6',
+    ntp: formatGameAmount(ntpCents),
+    l: bet.lines,
+    s: symbols,
+    w: formatGameAmount(winCents),
+    wlc_v: winLine
+  };
+}
+
+function vendorGameFeatureStartResponse({ balanceCents, bet, index, counter, purchaseIndex, purchaseCostCents }) {
+  const allModifiers = purchaseIndex === 1;
+  const activeMode = allModifiers ? 'all' : 'two';
+
+  return {
+    tw: '0.00',
+    fsmul: '1',
+    trail: 'fst~12',
+    balance: formatGameBalance(balanceCents),
+    accm: 's1cp~s1cd;s2cp~s2cd;s3cp~s3cd',
+    fsmax: '10',
+    acci: '0;1;2',
+    index,
+    balance_cash: formatGameBalance(balanceCents),
+    purtr: '1',
+    reel_set: '4',
+    balance_bonus: '0.00',
+    na: 's',
+    accv: randomDragonPotsAccumulator(activeMode),
+    fswin: '0.00',
+    puri: purchaseIndex,
+    bl: bet.betLevel,
+    stime: Date.now(),
+    fs: '1',
+    sa: 'OOOOOO',
+    sb: 'OOOOOO',
+    sh: '7',
+    fsres: '0.00',
+    st: 'rect',
+    c: bet.coinText,
+    sw: '6',
+    sver: '6',
+    counter,
+    ntp: formatGameAmount(-purchaseCostCents),
+    l: bet.lines,
+    s: randomDragonPotsReels({ forceFeature: true }),
+    w: '0.00'
+  };
+}
+
+function vendorGameFreeSpinResponse({ balanceCents, bet, index, counter, freeSpins, winCents }) {
+  freeSpins.totalWinCents += winCents;
+
+  const isLastSpin = freeSpins.current >= freeSpins.max;
+  const spinNumber = freeSpins.current;
+  const winLine = randomWinLine(winCents, bet);
+  const response = {
+    tw: formatGameAmount(freeSpins.totalWinCents),
+    fsmul: '1',
+    trail: isLastSpin ? 'fst~12;bpp~0,0,0' : 'fst~12',
+    balance: formatGameBalance(balanceCents),
+    accm: 's1cp~s1cd;s2cp~s2cd;s3cp~s3cd',
+    acci: '0;1;2',
+    index,
+    balance_cash: formatGameBalance(balanceCents),
+    reel_set: String(4 + Math.floor(Math.random() * 7)),
+    balance_bonus: '0.00',
+    na: isLastSpin ? 'c' : 's',
+    accv: randomDragonPotsAccumulator(freeSpins.mode),
+    fswin: isLastSpin ? undefined : formatGameAmount(freeSpins.totalWinCents),
+    fswin_total: isLastSpin ? formatGameAmount(freeSpins.totalWinCents) : undefined,
+    fsmul_total: isLastSpin ? '1' : undefined,
+    fs_total: isLastSpin ? String(freeSpins.max) : undefined,
+    fsend_total: isLastSpin ? '1' : undefined,
+    puri: freeSpins.purchaseIndex,
+    bl: bet.betLevel,
+    stime: Date.now(),
+    fs: isLastSpin ? undefined : String(spinNumber),
+    fsmax: isLastSpin ? undefined : String(freeSpins.max),
+    sa: 'OOOOOO',
+    sb: 'OOOOOO',
+    sh: '7',
+    fsres: isLastSpin ? undefined : formatGameAmount(freeSpins.totalWinCents),
+    st: 'rect',
+    c: bet.coinText,
+    sw: '6',
+    sver: '6',
+    counter,
+    ntp: formatGameAmount(-freeSpins.purchaseCostCents),
+    l: bet.lines,
+    s: randomDragonPotsReels(),
+    w: formatGameAmount(winCents),
+    wlc_v: winLine,
+    wmt: 'pr',
+    wmv: String([2, 3, 4, 5, 7, 10][Math.floor(Math.random() * 6)]),
+    gwm: String([2, 3, 4, 5, 7, 10][Math.floor(Math.random() * 6)])
+  };
+
+  freeSpins.current += 1;
+
+  if (isLastSpin) {
+    return response;
+  }
+
+  return response;
 }
 
 function parseDepositAmount(value) {
@@ -684,46 +950,181 @@ app.all('/api/admin/vendor-game/gs2c/ge/v5/gameService', async (req, res) => {
   }
 
   const action = String(req.body.action || req.query.action || 'doInit');
-  const coin = Number(req.body.c || req.query.c || vendorGameInitParams.get('c') || '0.10');
-  const lines = Number(req.body.l || req.query.l || vendorGameInitParams.get('l') || '20');
-  const betCents = Math.max(0, Math.round(coin * lines * 100));
+  const rawCoin = Number(req.body.c || req.query.c || vendorGameInitParams.get('defc') || '0.10');
+  const rawBetLevel = Number(req.body.bl || req.query.bl || '0');
+  const purchaseIndexValue = req.body.pur ?? req.query.pur;
+  const purchaseIndex = purchaseIndexValue === undefined ? null : Number(purchaseIndexValue);
+  const requestIndex = Number(req.body.index || req.query.index || 1);
+  const requestCounter = Number(req.body.counter || req.query.counter || 1);
+  const bet = vendorGameBetConfig(rawCoin, rawBetLevel);
+  const session = getVendorGameSession(req.vendorGameUser.id);
 
-  try {
-    if (action === 'doSpin' && betCents > 0) {
-      await pool.execute(
-        'UPDATE users SET balance_cents = GREATEST(balance_cents - ?, 0) WHERE id = ?',
-        [betCents, req.vendorGameUser.id]
-      );
-    }
-
+  const readBalance = async () => {
     const [rows] = await pool.execute(
       'SELECT balance_cents FROM users WHERE id = ? LIMIT 1',
       [req.vendorGameUser.id]
     );
-    const balance = formatGameBalance(rows[0]?.balance_cents || 0);
-    const now = Date.now();
-    const base = {
-      action,
-      balance,
-      balance_cash: balance,
+
+    return Number(rows[0]?.balance_cents || 0);
+  };
+
+  const sendNoMoney = (balanceCents) => {
+    res.type('text/plain').send(encodeGameResponse({
+      balance: formatGameBalance(balanceCents),
+      balance_cash: formatGameBalance(balanceCents),
       balance_bonus: '0.00',
-      c: coin.toFixed(2),
-      l: Number.isFinite(lines) ? lines : 20,
-      stime: now,
-      index: Math.floor(now / 1000),
-      counter: Math.floor(now / 500),
+      c: bet.coinText,
+      l: bet.lines,
+      bl: bet.betLevel,
+      na: 's',
+      nomoney: '1',
+      stime: Date.now(),
+      index: requestIndex,
+      counter: requestCounter
+    }));
+  };
+
+  try {
+    if (action === 'doInit') {
+      session.pendingWinCents = 0;
+      session.freeSpins = null;
+
+      const balanceCents = await readBalance();
+      const balance = formatGameBalance(balanceCents);
+
+      return res.type('text/plain').send(vendorGameResponse({
+        balance,
+        balance_cash: balance,
+        balance_bonus: '0.00',
+        stime: Date.now(),
+        index: requestIndex,
+        counter: requestCounter,
+        na: 's'
+      }));
+    }
+
+    if (action === 'doCollect') {
+      if (session.pendingWinCents > 0) {
+        await pool.execute(
+          'UPDATE users SET balance_cents = balance_cents + ? WHERE id = ?',
+          [session.pendingWinCents, req.vendorGameUser.id]
+        );
+        session.pendingWinCents = 0;
+      }
+
+      const balanceCents = await readBalance();
+
+      return res.type('text/plain').send(encodeGameResponse({
+        balance: formatGameBalance(balanceCents),
+        balance_cash: formatGameBalance(balanceCents),
+        balance_bonus: '0.00',
+        index: requestIndex,
+        counter: requestCounter,
+        na: 's',
+        stime: Date.now(),
+        sver: '6'
+      }));
+    }
+
+    if (action === 'doSpin') {
+      if (session.freeSpins) {
+        const balanceCents = await readBalance();
+        const winCents = randomWinCents(bet.betCents, { feature: true });
+        const response = vendorGameFreeSpinResponse({
+          balanceCents,
+          bet,
+          index: requestIndex,
+          counter: requestCounter,
+          freeSpins: session.freeSpins,
+          winCents
+        });
+
+        if (response.na === 'c') {
+          session.pendingWinCents = session.freeSpins.totalWinCents;
+          session.freeSpins = null;
+        }
+
+        return res.type('text/plain').send(encodeGameResponse(response));
+      }
+
+      if (purchaseIndex === 0 || purchaseIndex === 1) {
+        const purchaseCostCents = vendorGamePurchaseCostCents(purchaseIndex, bet.betCents);
+        const balanceCents = await readBalance();
+
+        if (balanceCents < purchaseCostCents) {
+          return sendNoMoney(balanceCents);
+        }
+
+        await pool.execute(
+          'UPDATE users SET balance_cents = balance_cents - ? WHERE id = ?',
+          [purchaseCostCents, req.vendorGameUser.id]
+        );
+        const updatedBalanceCents = await readBalance();
+        session.pendingWinCents = 0;
+        session.freeSpins = {
+          current: 2,
+          max: 10,
+          totalWinCents: 0,
+          purchaseIndex,
+          purchaseCostCents,
+          mode: purchaseIndex === 1 ? 'all' : 'two'
+        };
+
+        return res.type('text/plain').send(encodeGameResponse(vendorGameFeatureStartResponse({
+          balanceCents: updatedBalanceCents,
+          bet,
+          index: requestIndex,
+          counter: requestCounter,
+          purchaseIndex,
+          purchaseCostCents
+        })));
+      }
+
+      const balanceCents = await readBalance();
+
+      if (balanceCents < bet.betCents) {
+        return sendNoMoney(balanceCents);
+      }
+
+      await pool.execute(
+        'UPDATE users SET balance_cents = balance_cents - ? WHERE id = ?',
+        [bet.betCents, req.vendorGameUser.id]
+      );
+      const updatedBalanceCents = await readBalance();
+      const winCents = randomWinCents(bet.betCents);
+      session.pendingWinCents = winCents;
+
+      return res.type('text/plain').send(encodeGameResponse(baseVendorSpinResponse({
+        balanceCents: updatedBalanceCents,
+        bet,
+        index: requestIndex,
+        counter: requestCounter,
+        winCents,
+        nextAction: winCents > 0 ? 'c' : 's',
+        ntpCents: winCents - bet.betCents
+      })));
+    }
+
+    const balanceCents = await readBalance();
+
+    res.type('text/plain').send(encodeGameResponse({
+      action,
+      balance: formatGameBalance(balanceCents),
+      balance_cash: formatGameBalance(balanceCents),
+      balance_bonus: '0.00',
+      c: bet.coinText,
+      l: bet.lines,
+      bl: bet.betLevel,
+      stime: Date.now(),
+      index: requestIndex,
+      counter: requestCounter,
       na: 's',
       tw: '0.00',
       w: '0.00',
-      rs_p: '0',
       s: vendorGameInitParams.get('s') || vendorGameInitParams.get('def_s') || '',
       sa: vendorGameInitParams.get('def_sa') || vendorGameInitParams.get('sa') || '',
       sb: vendorGameInitParams.get('def_sb') || vendorGameInitParams.get('sb') || ''
-    };
-
-    res.type('text/plain').send(vendorGameResponse(action === 'doSpin'
-      ? { ...base, ...vendorGameSpinParams() }
-      : base));
+    }));
   } catch (error) {
     console.error(error);
     res.status(500).send('Could not simulate vendor game response.');
