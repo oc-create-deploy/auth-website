@@ -192,6 +192,7 @@ function App() {
   const [spinning, setSpinning] = useState(false);
   const [adminSaving, setAdminSaving] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [isNavigationOpen, setIsNavigationOpen] = useState(false);
   const emailInputRef = useRef(null);
 
   const token = localStorage.getItem('authToken');
@@ -252,6 +253,10 @@ function App() {
       posthog.reset();
     }
   }, [user]);
+
+  useEffect(() => {
+    setIsNavigationOpen(false);
+  }, [activeView, user]);
 
   useEffect(() => {
     async function restoreSession() {
@@ -680,6 +685,7 @@ function App() {
   function logout() {
     trackEvent('logout');
     setShowLogoutConfirm(false);
+    setIsNavigationOpen(false);
     localStorage.removeItem('authToken');
     setUser(null);
     setDeposits([]);
@@ -694,6 +700,11 @@ function App() {
     setSlotConfig(null);
     setPassword('');
     setMessage('Signed out.');
+  }
+
+  function openView(view) {
+    setActiveView(view);
+    setIsNavigationOpen(false);
   }
 
   return (
@@ -711,6 +722,18 @@ function App() {
           <div className="header-actions">
             {user ? (
               <>
+                <button
+                  type="button"
+                  className="menu-toggle"
+                  aria-label="Open navigation"
+                  aria-controls="memberNavigation"
+                  aria-expanded={isNavigationOpen}
+                  onClick={() => setIsNavigationOpen((isOpen) => !isOpen)}
+                >
+                  <span aria-hidden="true"></span>
+                  <span aria-hidden="true"></span>
+                  <span aria-hidden="true"></span>
+                </button>
                 <div className="balance-pill">
                   <span>Balance</span>
                   <strong>{formatMoney(user.balanceCents)}</strong>
@@ -775,11 +798,21 @@ function App() {
         <div className="app-stage">
           {user ? (
             <div className="member-layout">
-              <aside className="member-sidebar" aria-label="Account navigation">
+              <button
+                type="button"
+                className={`drawer-backdrop ${isNavigationOpen ? 'is-visible' : ''}`}
+                aria-label="Close navigation"
+                onClick={() => setIsNavigationOpen(false)}
+              ></button>
+              <aside
+                id="memberNavigation"
+                className={`member-sidebar ${isNavigationOpen ? 'is-open' : ''}`}
+                aria-label="Account navigation"
+              >
                 <button
                   type="button"
                   className={activeView === 'cashier' ? 'active' : ''}
-                  onClick={() => setActiveView('cashier')}
+                  onClick={() => openView('cashier')}
                 >
                   <span>Cashier</span>
                   <small>Balance and deposits</small>
@@ -787,7 +820,7 @@ function App() {
                 <button
                   type="button"
                   className={activeView === 'games' || activeView === 'slot' ? 'active' : ''}
-                  onClick={() => setActiveView('games')}
+                  onClick={() => openView('games')}
                 >
                   <span>Games</span>
                   <small>Slots catalogue</small>
@@ -796,7 +829,7 @@ function App() {
                   <button
                     type="button"
                     className={activeView === 'admin' ? 'active' : ''}
-                    onClick={() => setActiveView('admin')}
+                    onClick={() => openView('admin')}
                   >
                     <span>Admin panel</span>
                     <small>Operations control</small>

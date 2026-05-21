@@ -94,6 +94,41 @@ body {
   color: rgba(255, 247, 232, 0.55);
 }
 
+.drawer-backdrop,
+.menu-toggle {
+  display: none;
+}
+
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 6;
+  border: 0;
+  padding: 0;
+  background: rgba(0, 0, 0, 0.58);
+  backdrop-filter: blur(4px);
+}
+
+.menu-toggle {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  place-items: center;
+  border: 1px solid rgba(216, 180, 106, 0.42);
+  border-radius: 8px;
+  padding: 0;
+  background: rgba(216, 180, 106, 0.1);
+}
+
+.menu-toggle span {
+  display: block;
+  width: 18px;
+  height: 2px;
+  margin: 2px 0;
+  border-radius: 999px;
+  background: #f6d98f;
+}
+
 .player-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -1141,9 +1176,39 @@ body {
     grid-template-columns: 1fr;
   }
 
+  .member-layout {
+    display: block;
+  }
+
+  .menu-toggle {
+    display: grid;
+  }
+
+  .drawer-backdrop.is-visible {
+    display: block;
+  }
+
   .member-sidebar {
-    position: static;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 7;
+    width: min(82vw, 320px);
+    align-content: start;
+    border-top: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 0 8px 8px 0;
+    padding: 6rem 0.9rem 1rem;
+    transform: translateX(-104%);
+    transition: transform 180ms ease;
+    overflow-y: auto;
+    box-shadow: 18px 0 52px rgba(0, 0, 0, 0.42);
+  }
+
+  .member-sidebar.is-open {
+    transform: translateX(0);
   }
 
   .admin-grid {
@@ -1174,23 +1239,39 @@ body {
 
 @media (max-width: 575.98px) {
   .header-inner {
-    align-items: flex-start;
-    flex-direction: column;
+    align-items: center;
+    flex-direction: row;
     padding-top: 0.75rem;
     padding-bottom: 0.75rem;
   }
 
   .header-actions {
-    width: 100%;
+    width: auto;
+    min-width: 0;
+    margin-left: auto;
   }
 
-  .header-actions .btn,
   .balance-pill {
-    flex: 1;
+    min-width: 0;
+    width: 112px;
+    flex: 0 1 112px;
+  }
+
+  .balance-pill span {
+    font-size: 0.62rem;
+  }
+
+  .balance-pill strong {
+    font-size: 0.86rem;
+  }
+
+  .admin-pill,
+  .header-actions .btn {
+    display: none;
   }
 
   .app-stage {
-    padding-top: 10rem;
+    padding-top: 6.75rem;
   }
 
   .auth-card {
