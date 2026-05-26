@@ -2134,74 +2134,6 @@ body {
   color: rgba(255, 255, 255, 0.72);
 }
 
-.gamba-crash-carousel {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 1rem;
-}
-
-.gamba-crash-card {
-  position: relative;
-  min-height: 112px;
-  overflow: hidden;
-  border-radius: 10px;
-  transition: transform 0.2s ease, outline 0.2s ease;
-}
-
-.gamba-crash-card:hover {
-  transform: scale(1.01);
-  outline: rgba(149, 100, 255, 0.2) solid 5px;
-}
-
-.gamba-crash-card-pattern,
-.gamba-crash-card-image {
-  position: absolute;
-  inset: 0;
-  background-position: center;
-  background-repeat: no-repeat;
-}
-
-.gamba-crash-card-pattern {
-  background-image: url("/assets/gamba-stuff.png");
-  background-repeat: repeat;
-  background-size: 100%;
-  opacity: 0;
-  animation: gamba-crash-card-tiles 5s linear infinite;
-}
-
-.gamba-crash-card:hover .gamba-crash-card-pattern {
-  opacity: 0.35;
-}
-
-.gamba-crash-card-image {
-  background-size: 90% auto;
-  transform: scale(0.9);
-  transition: transform 0.2s ease;
-}
-
-.gamba-crash-card:hover .gamba-crash-card-image {
-  transform: scale(1);
-}
-
-.gamba-crash-card span {
-  position: absolute;
-  right: 5px;
-  bottom: 5px;
-  border-radius: 5px;
-  padding: 5px 10px;
-  background: rgba(0, 0, 0, 0.4);
-  color: #fff;
-  font-size: 14px;
-  font-weight: 800;
-  opacity: 0;
-  text-transform: uppercase;
-  backdrop-filter: blur(20px);
-}
-
-.gamba-crash-card:hover span {
-  opacity: 1;
-}
-
 @keyframes gamba-crash-starfall {
   from {
     transform: translateY(-100vh);
@@ -2209,16 +2141,6 @@ body {
 
   to {
     transform: translateY(0);
-  }
-}
-
-@keyframes gamba-crash-card-tiles {
-  from {
-    background-position: -100px 100px;
-  }
-
-  to {
-    background-position: 100px -100px;
   }
 }
 

@@ -1728,24 +1728,6 @@ function App() {
                     </div>
                   )}
 
-                  <div className="gamba-crash-carousel" aria-label="More Gamba games">
-                    {[
-                      ['dice', 'Dice', '#ff6490'],
-                      ['slots', 'Slots', '#5465ff'],
-                      ['flip', 'Flip', '#ffe694'],
-                      ['hilo', 'HiLo', '#ff4f4f'],
-                      ['mines', 'Mines', '#8376ff'],
-                      ['plinko', 'Plinko', '#7272ff'],
-                      ['roulette', 'Roulette', '#1de87e'],
-                      ['blackjack', 'BlackJack', '#084700']
-                    ].map(([id, name, background]) => (
-                      <div className="gamba-crash-card" key={id} style={{ background }}>
-                        <div className="gamba-crash-card-pattern" />
-                        <div className="gamba-crash-card-image" style={{ backgroundImage: `url(/assets/gamba-games/${id}.png)` }} />
-                        <span>Play {name}</span>
-                      </div>
-                    ))}
-                  </div>
                 </div>
               )}
 
