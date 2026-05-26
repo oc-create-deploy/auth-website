@@ -2066,8 +2066,40 @@ body {
 }
 
 .gamba-crash-slider input {
+  appearance: none;
   width: 100%;
+  height: 8px;
+  border-radius: 5px;
+  background: #d3d3d3;
   accent-color: #9564ff;
+  opacity: 0.7;
+  outline: none;
+  transition: opacity 0.2s;
+}
+
+.gamba-crash-slider input:hover {
+  opacity: 1;
+}
+
+.gamba-crash-slider input::-webkit-slider-thumb {
+  appearance: none;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 50%;
+  background-image: url("/assets/crash-rocket.gif");
+  background-size: 100% 100%;
+  cursor: pointer;
+}
+
+.gamba-crash-slider input::-moz-range-thumb {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 50%;
+  background-image: url("/assets/crash-rocket.gif");
+  background-size: 100% 100%;
+  cursor: pointer;
 }
 
 .gamba-crash-play {

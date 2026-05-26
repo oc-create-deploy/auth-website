@@ -32,10 +32,13 @@ const vendorGameInitParams = new URLSearchParams(vendorGameInitResponse);
 const cloakdDefaultPublicBaseUrl = process.env.NODE_ENV === 'production' ? 'https://casusdt.com' : 'http://localhost:5173';
 const aviatorRounds = new Map();
 const aviatorTickMs = 100;
-const corsOrigins = String(process.env.CORS_ORIGIN || 'http://localhost:5173')
-  .split(',')
-  .map((origin) => origin.trim())
-  .filter(Boolean);
+const corsOrigins = [
+  ...String(process.env.CORS_ORIGIN || 'http://localhost:5173')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean),
+  'http://127.0.0.1:5173'
+];
 
 app.use(helmet());
 app.use(cors({
@@ -284,10 +287,16 @@ function aviatorCrashMultiplier(serverSeed, clientSeed) {
 }
 
 function aviatorCurrentMultiplier(round, now = Date.now()) {
-  const elapsedSeconds = Math.max(0, (now - round.startedAt) / 1000);
-  const multiplier = Math.floor((1 + elapsedSeconds / 1.5 + elapsedSeconds * elapsedSeconds * 0.005) * 100) / 100;
+  const elapsedTicks = Math.max(0, Math.floor((now - round.startedAt) / 50));
+  let multiplier = 0;
 
-  return Math.max(aviatorMinMultiplier, Math.min(multiplier, round.crashMultiplier));
+  for (let tick = 0; tick < elapsedTicks; tick += 1) {
+    multiplier += 0.01 * (Math.floor(multiplier) + 1);
+  }
+
+  multiplier = Math.round(multiplier * 100) / 100;
+
+  return Math.min(multiplier, round.crashMultiplier);
 }
 
 function publicAviatorRound(round) {
@@ -823,13 +832,13 @@ app.post('/api/aviator/rounds', requireUser, requireAdmin, async (req, res) => {
   const clientSeed = String(req.body.clientSeed || `user-${req.user.id}`).slice(0, 120);
 
   if (!betCents) {
-    return res.status(400).json({ message: 'Enter an Aviator bet from $1 to $10,000.' });
+    return res.status(400).json({ message: 'Enter a Crash bet from $1 to $10,000.' });
   }
 
   const existingRound = [...aviatorRounds.values()].find((round) => round.userId === req.user.id);
 
   if (existingRound && aviatorCurrentMultiplier(existingRound) < existingRound.crashMultiplier) {
-    return res.status(409).json({ message: 'Cash out or wait for the current Aviator round to finish.' });
+    return res.status(409).json({ message: 'Wait for the current Crash round to finish.' });
   }
 
   if (existingRound) {
@@ -853,7 +862,7 @@ app.post('/api/aviator/rounds', requireUser, requireAdmin, async (req, res) => {
 
     if (Number(user.balance_cents) < betCents) {
       await connection.rollback();
-      return res.status(400).json({ message: 'Insufficient balance for this Aviator bet.' });
+      return res.status(400).json({ message: 'Insufficient balance for this Crash bet.' });
     }
 
     await connection.execute(
@@ -888,7 +897,7 @@ app.post('/api/aviator/rounds', requireUser, requireAdmin, async (req, res) => {
   } catch (error) {
     await connection.rollback();
     console.error(error);
-    res.status(500).json({ message: 'Could not start Aviator round.' });
+    res.status(500).json({ message: 'Could not start Crash round.' });
   } finally {
     connection.release();
   }
@@ -898,7 +907,7 @@ app.get('/api/aviator/rounds/:id', requireUser, requireAdmin, (req, res) => {
   const round = aviatorRounds.get(req.params.id);
 
   if (!round || round.userId !== req.user.id) {
-    return res.status(404).json({ message: 'Aviator round not found.' });
+    return res.status(404).json({ message: 'Crash round not found.' });
   }
 
   const publicRound = publicAviatorRound(round);
@@ -914,7 +923,7 @@ app.post('/api/aviator/rounds/:id/cashout', requireUser, requireAdmin, async (re
   const round = aviatorRounds.get(req.params.id);
 
   if (!round || round.userId !== req.user.id) {
-    return res.status(404).json({ message: 'Aviator round not found.' });
+    return res.status(404).json({ message: 'Crash round not found.' });
   }
 
   const multiplier = aviatorCurrentMultiplier(round);
@@ -966,7 +975,7 @@ app.post('/api/aviator/rounds/:id/cashout', requireUser, requireAdmin, async (re
   } catch (error) {
     await connection.rollback();
     console.error(error);
-    res.status(500).json({ message: 'Could not cash out Aviator round.' });
+    res.status(500).json({ message: 'Could not settle Crash round.' });
   } finally {
     connection.release();
   }

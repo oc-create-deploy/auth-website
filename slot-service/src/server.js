@@ -25,10 +25,13 @@ let slotopolPlayerToken = null;
 let slotopolSyncedRtp = null;
 let slotopolGameCatalogCache = null;
 let slotopolGameCatalogCacheAt = 0;
-const corsOrigins = String(process.env.CORS_ORIGIN || 'http://localhost:5173')
-  .split(',')
-  .map((origin) => origin.trim())
-  .filter(Boolean);
+const corsOrigins = [
+  ...String(process.env.CORS_ORIGIN || 'http://localhost:5173')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean),
+  'http://127.0.0.1:5173'
+];
 
 const pool = mysql.createPool({
   host: process.env.DB_HOST || 'localhost',

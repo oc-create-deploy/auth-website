@@ -287,6 +287,37 @@ function linePattern(line) {
   return paylinePatterns[(winningLineNumber(line) - 1) % paylinePatterns.length];
 }
 
+function generateCrashShadows(count) {
+  const width = typeof window === 'undefined' ? 1600 : Math.max(window.innerWidth, 1200);
+  const height = 4000;
+
+  return Array.from({ length: count }, () => {
+    const x = Math.round(Math.random() * width);
+    const y = Math.round(Math.random() * height);
+    return `${x}px ${y}px #ffffff`;
+  }).join(', ');
+}
+
+function crashTargetFromSlider(index) {
+  if (index <= 50) {
+    return Math.round((1 + (9 * (index / 50))) * 4) / 4;
+  }
+
+  return Math.round(10 + (90 * ((index - 50) / 50)));
+}
+
+function crashSliderFromTarget(target) {
+  if (target <= 10) {
+    return Math.round(((target - 1) / 9) * 50);
+  }
+
+  return Math.round(50 + ((target - 10) / 90) * 50);
+}
+
+function nextCrashMultiplier(current) {
+  return Math.round((current + 0.01 * (Math.floor(current) + 1)) * 100) / 100;
+}
+
 function App() {
   const [mode, setMode] = useState('login');
   const [activeView, setActiveView] = useState('cashier');
@@ -310,7 +341,7 @@ function App() {
   const [slotSpinPhase, setSlotSpinPhase] = useState('idle');
   const [aviatorBet, setAviatorBet] = useState('1');
   const [aviatorRound, setAviatorRound] = useState(null);
-  const [aviatorMultiplier, setAviatorMultiplier] = useState(1);
+  const [aviatorMultiplier, setAviatorMultiplier] = useState(0);
   const [aviatorResult, setAviatorResult] = useState(null);
   const [aviatorBusy, setAviatorBusy] = useState(false);
   const [aviatorHistory, setAviatorHistory] = useState(['1.34x', '2.08x', '1.11x', '4.72x', '1.86x', '7.40x']);
@@ -349,6 +380,9 @@ function App() {
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [showCrashInfo, setShowCrashInfo] = useState(true);
   const emailInputRef = useRef(null);
+  const aviatorMultiplierRef = useRef(0);
+  const aviatorCashoutRef = useRef(false);
+  const crashAudioRefs = useRef({});
 
   const token = localStorage.getItem('authToken');
   const title = mode === 'login' ? 'Login' : 'Registration';
@@ -385,17 +419,20 @@ function App() {
   ];
   const visibleGames = games.filter((game) => game.enabled !== false);
   const isSelectedSlotDisabled = slotSession?.enabled === false;
+  const crashShadows = useMemo(() => ({
+    small: generateCrashShadows(700),
+    medium: generateCrashShadows(200),
+    big: generateCrashShadows(100)
+  }), []);
   const gambaCrashMultiplier = aviatorRound ? aviatorMultiplier : aviatorResult ? aviatorResult.multiplier : 0;
-  const crashRocketProgress = Math.min(gambaCrashMultiplier, 1);
+  const crashRocketProgress = Math.min(gambaCrashMultiplier / 1, 1);
   const crashRocketStyle = {
     left: `${crashRocketProgress * 80}%`,
     bottom: `${Math.pow(crashRocketProgress, 5) * 70}%`,
     transform: `rotate(${(1 - Math.pow(crashRocketProgress, 2.3)) * 90}deg)`
   };
   const gambaCrashTone = aviatorResult?.crashed ? 'is-crashed' : aviatorResult ? 'is-win' : '';
-  const crashTargetSliderValue = aviatorTarget <= 10
-    ? Math.round(((aviatorTarget - 1) / 9) * 50)
-    : Math.round(50 + ((aviatorTarget - 10) / 90) * 50);
+  const crashTargetSliderValue = crashSliderFromTarget(aviatorTarget);
 
   const passwordHint = useMemo(() => {
     if (mode === 'login') {
@@ -404,6 +441,31 @@ function App() {
 
     return password.length >= 8 ? 'Password length looks good.' : 'Use at least 8 characters.';
   }, [mode, password]);
+
+  function stopCrashMusic() {
+    const music = crashAudioRefs.current.music;
+
+    if (music) {
+      music.pause();
+      music.currentTime = 0;
+    }
+  }
+
+  function playCrashSound(name) {
+    const sources = {
+      music: '/assets/crash-music.mp3',
+      crash: '/assets/crash-crash.mp3',
+      win: '/assets/crash-win.mp3'
+    };
+
+    if (!crashAudioRefs.current[name]) {
+      crashAudioRefs.current[name] = new Audio(sources[name]);
+    }
+
+    const audio = crashAudioRefs.current[name];
+    audio.currentTime = 0;
+    audio.play().catch(() => {});
+  }
 
   useEffect(() => {
     trackEvent('$pageview', { view: user ? activeView : mode });
@@ -421,64 +483,109 @@ function App() {
   }, [user]);
 
   useEffect(() => {
+    aviatorMultiplierRef.current = aviatorMultiplier;
+  }, [aviatorMultiplier]);
+
+  useEffect(() => {
     if (!aviatorRound || aviatorRound.crashed) {
       return undefined;
     }
 
+    let cancelled = false;
+    let pollTick = 0;
+
+    const settleCrash = (result, userUpdate = null) => {
+      stopCrashMusic();
+      playCrashSound(result.crashed ? 'crash' : 'win');
+      setAviatorRound(null);
+      setAviatorResult(result);
+      setAviatorMultiplier(result.multiplier);
+      setAviatorHistory((history) => [
+        `${result.multiplier.toFixed(2)}x`,
+        ...history
+      ].slice(0, 12));
+
+      if (userUpdate) {
+        setUser(userUpdate);
+      }
+    };
+
     const interval = window.setInterval(async () => {
-      try {
-        const data = await apiRequest(`/api/aviator/rounds/${aviatorRound.id}`);
-        setAviatorRound(data.round);
-        setAviatorMultiplier(data.round.multiplier);
+      if (cancelled) {
+        return;
+      }
 
-        if (data.round.crashed) {
-          setAviatorHistory((history) => [
-            `${data.round.multiplier.toFixed(2)}x`,
-            ...history
-          ].slice(0, 12));
-          setAviatorResult({
-            crashed: true,
-            multiplier: data.round.multiplier,
-            betCents: data.round.betCents,
-            winCents: 0,
-            netCents: -data.round.betCents
-          });
-          setAviatorRound(null);
-          setMessage(`Crash game ended at ${data.round.multiplier.toFixed(2)}x.`);
-          return;
-        }
+      const nextMultiplier = nextCrashMultiplier(aviatorMultiplierRef.current);
+      aviatorMultiplierRef.current = nextMultiplier;
+      setAviatorMultiplier(nextMultiplier);
+      pollTick += 1;
 
-        if (data.round.multiplier >= aviatorTarget && !aviatorBusy) {
-          setAviatorBusy(true);
+      if (nextMultiplier >= aviatorTarget && !aviatorCashoutRef.current) {
+        aviatorCashoutRef.current = true;
+        setAviatorBusy(true);
+
+        try {
           const cashout = await apiRequest(`/api/aviator/rounds/${aviatorRound.id}/cashout`, {
             method: 'POST'
           });
 
-          setUser(cashout.user);
-          setAviatorRound(null);
-          setAviatorResult(cashout.result);
-          setAviatorMultiplier(cashout.result.multiplier);
-          setAviatorHistory((history) => [
-            `${cashout.result.multiplier.toFixed(2)}x`,
-            ...history
-          ].slice(0, 12));
-          trackEvent('crash_round_auto_cashed_out', {
-            betCents: cashout.result.betCents,
-            winCents: cashout.result.winCents,
-            multiplier: cashout.result.multiplier,
-            target: aviatorTarget
-          });
-          setMessage(`Crash auto cashed out at ${cashout.result.multiplier.toFixed(2)}x for ${formatMoney(cashout.result.winCents)}.`);
+          if (!cancelled) {
+            settleCrash(cashout.result, cashout.user);
+            trackEvent('crash_round_auto_cashed_out', {
+              betCents: cashout.result.betCents,
+              winCents: cashout.result.winCents,
+              multiplier: cashout.result.multiplier,
+              target: aviatorTarget
+            });
+            setMessage(`Crash paid ${formatMoney(cashout.result.winCents)} at ${cashout.result.multiplier.toFixed(2)}x.`);
+          }
+        } catch (error) {
+          if (!cancelled) {
+            const result = error.result || {
+              crashed: true,
+              multiplier: nextMultiplier,
+              betCents: aviatorRound.betCents,
+              winCents: 0,
+              netCents: -aviatorRound.betCents
+            };
+            settleCrash(result);
+            setMessage(error.message);
+          }
+        } finally {
+          if (!cancelled) {
+            setAviatorBusy(false);
+          }
         }
-      } catch (_error) {
-        setAviatorRound(null);
-      } finally {
-        setAviatorBusy(false);
       }
-    }, 120);
 
-    return () => window.clearInterval(interval);
-  }, [aviatorRound?.id, aviatorRound?.crashed, aviatorBusy, aviatorTarget]);
+      if (pollTick % 4 === 0 && !aviatorCashoutRef.current) {
+        try {
+          const data = await apiRequest(`/api/aviator/rounds/${aviatorRound.id}`);
+
+          if (!cancelled && data.round.crashed) {
+            settleCrash({
+              crashed: true,
+              multiplier: data.round.multiplier,
+              betCents: data.round.betCents,
+              winCents: 0,
+              netCents: -data.round.betCents
+            });
+            setMessage(`Crash game ended at ${data.round.multiplier.toFixed(2)}x.`);
+          }
+        } catch (_error) {
+          if (!cancelled && !aviatorCashoutRef.current) {
+            stopCrashMusic();
+            setAviatorRound(null);
+          }
+        }
+      }
+    }, 50);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [aviatorRound?.id, aviatorRound?.crashed, aviatorTarget]);
 
   useEffect(() => {
     async function restoreSession() {
@@ -913,6 +1020,9 @@ function App() {
   async function startAviatorRound() {
     setAviatorBusy(true);
     setAviatorResult(null);
+    setAviatorMultiplier(0);
+    aviatorMultiplierRef.current = 0;
+    aviatorCashoutRef.current = false;
     setMessage('');
 
     try {
@@ -926,7 +1036,8 @@ function App() {
 
       setUser(data.user);
       setAviatorRound(data.round);
-      setAviatorMultiplier(data.round.multiplier || 1);
+      setAviatorMultiplier(0);
+      playCrashSound('music');
       trackEvent('crash_round_started', {
         betCents: data.round.betCents,
         roundId: data.round.id,
@@ -1072,7 +1183,7 @@ function App() {
     setSlotResult(null);
     setAviatorRound(null);
     setAviatorResult(null);
-    setAviatorMultiplier(1);
+    setAviatorMultiplier(0);
     setAdminUsers([]);
     setSelectedAdminUserId('');
     setSelectedAdminSlotGameCode('ctinteractive/luckydollar');
@@ -1520,12 +1631,12 @@ function App() {
                         </div>
                       )}
                       <div className="gamba-crash-screen-inner">
-                        <div className="gamba-crash-stars-layer gamba-crash-stars-layer-1" style={{ opacity: gambaCrashMultiplier > 3 ? 0 : 1 }} />
-                        <div className="gamba-crash-lines-layer gamba-crash-lines-layer-1" style={{ opacity: gambaCrashMultiplier > 3 ? 1 : 0 }} />
-                        <div className="gamba-crash-stars-layer gamba-crash-stars-layer-2" style={{ opacity: gambaCrashMultiplier > 2 ? 0 : 1 }} />
-                        <div className="gamba-crash-lines-layer gamba-crash-lines-layer-2" style={{ opacity: gambaCrashMultiplier > 2 ? 1 : 0 }} />
-                        <div className="gamba-crash-stars-layer gamba-crash-stars-layer-3" style={{ opacity: gambaCrashMultiplier > 1 ? 0 : 1 }} />
-                        <div className="gamba-crash-lines-layer gamba-crash-lines-layer-3" style={{ opacity: gambaCrashMultiplier > 1 ? 1 : 0 }} />
+                        <div className="gamba-crash-stars-layer gamba-crash-stars-layer-1" style={{ opacity: gambaCrashMultiplier > 3 ? 0 : 1, boxShadow: crashShadows.small }} />
+                        <div className="gamba-crash-lines-layer gamba-crash-lines-layer-1" style={{ opacity: gambaCrashMultiplier > 3 ? 1 : 0, boxShadow: crashShadows.small }} />
+                        <div className="gamba-crash-stars-layer gamba-crash-stars-layer-2" style={{ opacity: gambaCrashMultiplier > 2 ? 0 : 1, boxShadow: crashShadows.medium }} />
+                        <div className="gamba-crash-lines-layer gamba-crash-lines-layer-2" style={{ opacity: gambaCrashMultiplier > 2 ? 1 : 0, boxShadow: crashShadows.medium }} />
+                        <div className="gamba-crash-stars-layer gamba-crash-stars-layer-3" style={{ opacity: gambaCrashMultiplier > 1 ? 0 : 1, boxShadow: crashShadows.big }} />
+                        <div className="gamba-crash-lines-layer gamba-crash-lines-layer-3" style={{ opacity: gambaCrashMultiplier > 1 ? 1 : 0, boxShadow: crashShadows.big }} />
                         <div className={'gamba-crash-multiplier ' + gambaCrashTone}>
                           {gambaCrashMultiplier.toFixed(2)}x
                         </div>
@@ -1598,23 +1709,14 @@ function App() {
                           disabled={Boolean(aviatorRound)}
                           onChange={(event) => {
                             const index = Number(event.target.value);
-                            const nextTarget = index <= 50
-                              ? Math.round((1 + (9 * (index / 50))) * 4) / 4
-                              : Math.round(10 + (90 * ((index - 50) / 50)));
-                            setAviatorTarget(nextTarget);
+                            setAviatorTarget(crashTargetFromSlider(index));
                           }}
                         />
                       </div>
 
-                      {aviatorRound ? (
-                        <button className="gamba-crash-play" type="button" disabled={aviatorBusy} onClick={cashOutAviatorRound}>
-                          Cash out {formatMoney(Math.floor(aviatorRound.betCents * aviatorMultiplier))}
-                        </button>
-                      ) : (
-                        <button className="gamba-crash-play" type="button" disabled={aviatorBusy} onClick={startAviatorRound}>
-                          {aviatorBusy ? 'Launching...' : 'Play'}
-                        </button>
-                      )}
+                      <button className="gamba-crash-play" type="button" disabled={aviatorBusy || Boolean(aviatorRound)} onClick={startAviatorRound}>
+                        {aviatorRound ? 'Flying...' : aviatorBusy ? 'Launching...' : 'Play'}
+                      </button>
                     </div>
                   </div>
 
