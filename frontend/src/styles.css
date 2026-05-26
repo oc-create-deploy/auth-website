@@ -1875,10 +1875,16 @@ body {
 
 .hi-crash-stars {
   background-repeat: repeat;
-  animation: hi-crash-stars 80s linear infinite;
+  will-change: transform, opacity;
+  animation: hi-crash-stars-idle var(--star-idle-speed, 90s) ease-in-out infinite alternate;
+  transition: opacity 180ms ease;
 }
 
 .hi-crash-stars-one {
+  --star-idle-speed: 36s;
+  --star-launch-speed: 1.8s;
+  --star-launch-x: -74px;
+  --star-launch-y: 112px;
   background-image:
     radial-gradient(circle, rgba(255, 255, 255, 0.95) 0 1px, transparent 1.5px),
     radial-gradient(circle, rgba(255, 255, 255, 0.6) 0 1px, transparent 1.5px);
@@ -1887,36 +1893,54 @@ body {
 }
 
 .hi-crash-stars-two {
+  --star-idle-speed: 54s;
+  --star-launch-speed: 1.05s;
+  --star-launch-x: -112px;
+  --star-launch-y: 168px;
   background-image:
     radial-gradient(circle, rgba(125, 211, 252, 0.8) 0 1.2px, transparent 1.8px),
     radial-gradient(circle, rgba(255, 255, 255, 0.72) 0 1px, transparent 1.5px);
   background-size: 122px 122px, 210px 210px;
   background-position: 24px 76px, 98px 44px;
-  animation-duration: 48s;
   opacity: 0.8;
 }
 
 .hi-crash-stars-three {
+  --star-idle-speed: 78s;
+  --star-launch-speed: 0.72s;
+  --star-launch-x: -162px;
+  --star-launch-y: 242px;
   background-image:
     radial-gradient(circle, rgba(250, 204, 21, 0.74) 0 1.5px, transparent 2.2px),
     radial-gradient(circle, rgba(255, 255, 255, 0.85) 0 1px, transparent 1.7px);
   background-size: 260px 260px, 320px 320px;
   background-position: 32px 120px, 160px 70px;
-  animation-duration: 120s;
   opacity: 0.55;
+}
+
+.hi-aviator-stage.is-flying .hi-crash-stars {
+  animation-name: hi-crash-stars-launch;
+  animation-duration: var(--star-launch-speed);
+  animation-timing-function: linear;
+  animation-direction: normal;
+  opacity: 0.92;
 }
 
 .hi-crash-speed-lines {
   opacity: 0;
-  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.86) 0 42%, transparent 43% 100%);
-  background-size: 3px 72px;
-  transform: skewX(-18deg);
-  animation: hi-crash-speed 1.4s linear infinite;
+  background-image:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0 38%, transparent 39% 100%),
+    linear-gradient(180deg, rgba(125, 211, 252, 0.55) 0 32%, transparent 33% 100%);
+  background-size: 3px 96px, 2px 64px;
+  background-position: 18px 0, 74px 20px;
+  transform: rotate(33deg) scale(1.45);
+  animation: hi-crash-speed 0.46s linear infinite;
   transition: opacity 180ms ease;
+  will-change: transform;
 }
 
 .hi-aviator-stage.is-flying .hi-crash-speed-lines {
-  opacity: 0.32;
+  opacity: 0.38;
 }
 
 .hi-crash-rocket {
@@ -2159,23 +2183,33 @@ body {
   color: rgba(255, 255, 255, 0.72);
 }
 
-@keyframes hi-crash-stars {
+@keyframes hi-crash-stars-idle {
   from {
-    transform: translateY(-90px);
+    transform: translate3d(-10px, -12px, 0) scale(1);
   }
 
   to {
-    transform: translateY(0);
+    transform: translate3d(12px, 14px, 0) scale(1.012);
+  }
+}
+
+@keyframes hi-crash-stars-launch {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+
+  to {
+    transform: translate3d(var(--star-launch-x), var(--star-launch-y), 0);
   }
 }
 
 @keyframes hi-crash-speed {
   from {
-    transform: translateY(-72px) skewX(-18deg);
+    transform: translate3d(-96px, -96px, 0) rotate(33deg) scale(1.45);
   }
 
   to {
-    transform: translateY(0) skewX(-18deg);
+    transform: translate3d(96px, 96px, 0) rotate(33deg) scale(1.45);
   }
 }
 
