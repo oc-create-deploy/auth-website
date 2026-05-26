@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import cors from 'cors';
+import crypto from 'crypto';
 import express from 'express';
 import helmet from 'helmet';
 import jwt from 'jsonwebtoken';
@@ -56,6 +57,90 @@ const payoutTable = {
   coin: 3,
   cherry: 2,
   lemon: 1
+};
+
+const openSourceSlotSymbols = [
+  { id: 'gold', label: 'Gold', weight: 4, icon: 'GOLD' },
+  { id: 'gem', label: 'Gem', weight: 5, icon: 'GEM' },
+  { id: 'seven', label: 'Seven', weight: 6, icon: '7' },
+  { id: 'bar', label: 'Bar', weight: 9, icon: 'BAR' },
+  { id: 'bolt', label: 'Bolt', weight: 12, icon: 'BOLT' },
+  { id: 'coin', label: 'Coin', weight: 16, icon: 'COIN' },
+  { id: 'cherry', label: 'Cherry', weight: 20, icon: 'CHRY' },
+  { id: 'lemon', label: 'Lemon', weight: 28, icon: 'LEMN' }
+];
+
+const openSourceSlotPayouts = {
+  gold: { 5: 100, 4: 20, 3: 5 },
+  gem: { 5: 60, 4: 15, 3: 4 },
+  seven: { 5: 40, 4: 10, 3: 3 },
+  bar: { 5: 25, 4: 6, 3: 2 },
+  bolt: { 5: 16, 4: 4, 3: 1.5 },
+  coin: { 5: 10, 4: 3, 3: 1 },
+  cherry: { 5: 8, 4: 2, 3: 0.8 },
+  lemon: { 5: 5, 4: 1.5, 3: 0.5 }
+};
+
+const openSourcePaylines = [
+  [1, 1, 1, 1, 1],
+  [0, 0, 0, 0, 0],
+  [2, 2, 2, 2, 2],
+  [0, 1, 2, 1, 0],
+  [2, 1, 0, 1, 2],
+  [0, 0, 1, 2, 2],
+  [2, 2, 1, 0, 0],
+  [1, 0, 0, 0, 1],
+  [1, 2, 2, 2, 1]
+];
+
+const plinkoRowOptions = [8, 9, 10, 11, 12, 13, 14, 15, 16];
+const plinkoRiskLevels = ['low', 'medium', 'high'];
+const plinkoPayouts = {
+  8: {
+    low: [5.6, 2.1, 1.1, 1, 0.5, 1, 1.1, 2.1, 5.6],
+    medium: [13, 3, 1.3, 0.7, 0.4, 0.7, 1.3, 3, 13],
+    high: [29, 4, 1.5, 0.3, 0.2, 0.3, 1.5, 4, 29]
+  },
+  9: {
+    low: [5.6, 2, 1.6, 1, 0.7, 0.7, 1, 1.6, 2, 5.6],
+    medium: [18, 4, 1.7, 0.9, 0.5, 0.5, 0.9, 1.7, 4, 18],
+    high: [43, 7, 2, 0.6, 0.2, 0.2, 0.6, 2, 7, 43]
+  },
+  10: {
+    low: [8.9, 3, 1.4, 1.1, 1, 0.5, 1, 1.1, 1.4, 3, 8.9],
+    medium: [22, 5, 2, 1.4, 0.6, 0.4, 0.6, 1.4, 2, 5, 22],
+    high: [76, 10, 3, 0.9, 0.3, 0.2, 0.3, 0.9, 3, 10, 76]
+  },
+  11: {
+    low: [8.4, 3, 1.9, 1.3, 1, 0.7, 0.7, 1, 1.3, 1.9, 3, 8.4],
+    medium: [24, 6, 3, 1.8, 0.7, 0.5, 0.5, 0.7, 1.8, 3, 6, 24],
+    high: [120, 14, 5.2, 1.4, 0.4, 0.2, 0.2, 0.4, 1.4, 5.2, 14, 120]
+  },
+  12: {
+    low: [10, 3, 1.6, 1.4, 1.1, 1, 0.5, 1, 1.1, 1.4, 1.6, 3, 10],
+    medium: [33, 11, 4, 2, 1.1, 0.6, 0.3, 0.6, 1.1, 2, 4, 11, 33],
+    high: [170, 24, 8.1, 2, 0.7, 0.2, 0.2, 0.2, 0.7, 2, 8.1, 24, 170]
+  },
+  13: {
+    low: [8.1, 4, 3, 1.9, 1.2, 0.9, 0.7, 0.7, 0.9, 1.2, 1.9, 3, 4, 8.1],
+    medium: [43, 13, 6, 3, 1.3, 0.7, 0.4, 0.4, 0.7, 1.3, 3, 6, 13, 43],
+    high: [260, 37, 11, 4, 1, 0.2, 0.2, 0.2, 0.2, 1, 4, 11, 37, 260]
+  },
+  14: {
+    low: [7.1, 4, 1.9, 1.4, 1.3, 1.1, 1, 0.5, 1, 1.1, 1.3, 1.4, 1.9, 4, 7.1],
+    medium: [58, 15, 7, 4, 1.9, 1, 0.5, 0.2, 0.5, 1, 1.9, 4, 7, 15, 58],
+    high: [420, 56, 18, 5, 1.9, 0.3, 0.2, 0.2, 0.2, 0.3, 1.9, 5, 18, 56, 420]
+  },
+  15: {
+    low: [15, 8, 3, 2, 1.5, 1.1, 1, 0.7, 0.7, 1, 1.1, 1.5, 2, 3, 8, 15],
+    medium: [88, 18, 11, 5, 3, 1.3, 0.5, 0.3, 0.3, 0.5, 1.3, 3, 5, 11, 18, 88],
+    high: [620, 83, 27, 8, 3, 0.5, 0.2, 0.2, 0.2, 0.2, 0.5, 3, 8, 27, 83, 620]
+  },
+  16: {
+    low: [16, 9, 2, 1.4, 1.4, 1.2, 1.1, 1, 0.5, 1, 1.1, 1.2, 1.4, 1.4, 2, 9, 16],
+    medium: [110, 41, 10, 5, 3, 1.5, 1, 0.5, 0.3, 0.5, 1, 1.5, 3, 5, 10, 41, 110],
+    high: [1000, 130, 26, 9, 4, 2, 0.2, 0.2, 0.2, 0.2, 0.2, 2, 4, 9, 26, 130, 1000]
+  }
 };
 
 app.use(helmet());
@@ -131,6 +216,114 @@ function randomSymbol() {
   }
 
   return symbols[symbols.length - 1];
+}
+
+function weightedOpenSourceSymbol(randomValue) {
+  const total = openSourceSlotSymbols.reduce((sum, symbol) => sum + symbol.weight, 0);
+  let roll = randomValue % total;
+
+  for (const symbol of openSourceSlotSymbols) {
+    if (roll < symbol.weight) {
+      return symbol;
+    }
+    roll -= symbol.weight;
+  }
+
+  return openSourceSlotSymbols[openSourceSlotSymbols.length - 1];
+}
+
+function buildOpenSourceSpin({ serverSeed, clientSeed, nonce }) {
+  const firstDigest = crypto
+    .createHmac('sha256', serverSeed)
+    .update(`${clientSeed}:${nonce}`)
+    .digest();
+  const secondDigest = crypto
+    .createHmac('sha256', serverSeed)
+    .update(`${clientSeed}:${nonce}:extra`)
+    .digest();
+  const digest = Buffer.concat([firstDigest, secondDigest]);
+  let offset = 0;
+
+  return Array.from({ length: 5 }, () => Array.from({ length: 3 }, () => {
+    const value = digest.readUInt32BE(offset);
+    offset += 4;
+    return weightedOpenSourceSymbol(value);
+  }));
+}
+
+function calculateOpenSourceWin(reels, betCents) {
+  const lineBet = Math.max(1, Math.floor(betCents / openSourcePaylines.length));
+  const winningLines = [];
+  let winCents = 0;
+
+  openSourcePaylines.forEach((pattern, index) => {
+    const symbolsOnLine = pattern.map((rowIndex, reelIndex) => reels[reelIndex][rowIndex]);
+    const first = symbolsOnLine[0];
+    let matchCount = 1;
+
+    for (let symbolIndex = 1; symbolIndex < symbolsOnLine.length; symbolIndex += 1) {
+      if (symbolsOnLine[symbolIndex].id !== first.id) {
+        break;
+      }
+      matchCount += 1;
+    }
+
+    if (matchCount >= 3) {
+      const multiplier = openSourceSlotPayouts[first.id]?.[matchCount] || 0;
+      const amountCents = Math.floor(lineBet * multiplier);
+      winCents += amountCents;
+      winningLines.push({
+        index,
+        symbol: first.id,
+        matchCount,
+        multiplier,
+        amountCents
+      });
+    }
+  });
+
+  return { winCents, winningLines };
+}
+
+function parsePlinkoRows(value) {
+  const rows = Number(value || 16);
+  return plinkoRowOptions.includes(rows) ? rows : null;
+}
+
+function parsePlinkoRisk(value) {
+  const risk = String(value || 'medium').toLowerCase();
+  return plinkoRiskLevels.includes(risk) ? risk : null;
+}
+
+function buildPlinkoDrop({ serverSeed, clientSeed, nonce, rows }) {
+  const digest = crypto
+    .createHmac('sha256', serverSeed)
+    .update(`${clientSeed}:${nonce}:plinko`)
+    .digest();
+  const path = [];
+  let binIndex = 0;
+
+  for (let row = 0; row < rows; row += 1) {
+    const byte = digest[row % digest.length];
+    const direction = (byte >> (row % 8)) & 1;
+    path.push(direction === 1 ? 'R' : 'L');
+    binIndex += direction;
+  }
+
+  return { binIndex, path };
+}
+
+function calculatePlinkoWin({ betCents, rows, risk, binIndex }) {
+  const multiplier = Number(plinkoPayouts[rows]?.[risk]?.[binIndex]);
+
+  if (!Number.isFinite(multiplier)) {
+    return { multiplier: 0, winCents: 0 };
+  }
+
+  return {
+    multiplier,
+    winCents: Math.max(0, Math.floor(betCents * multiplier))
+  };
 }
 
 function buildSpin() {
@@ -754,6 +947,190 @@ app.post('/api/slots/spin', requireUser, async (req, res) => {
     await connection.rollback();
     console.error(error);
     res.status(500).json({ message: 'Spin could not be settled.' });
+  } finally {
+    connection.release();
+  }
+});
+
+app.post('/api/plinko/drop', requireUser, async (req, res) => {
+  const betCents = parseBet(req.body.bet);
+  const rows = parsePlinkoRows(req.body.rows);
+  const risk = parsePlinkoRisk(req.body.risk);
+  const clientSeed = String(req.body.clientSeed || req.user.id || 'casusdt-plinko').slice(0, 80);
+
+  if (!betCents) {
+    return res.status(400).json({ message: 'Enter a stake from 1 to 1,000.' });
+  }
+
+  if (!rows) {
+    return res.status(400).json({ message: 'Choose 8 to 16 rows.' });
+  }
+
+  if (!risk) {
+    return res.status(400).json({ message: 'Choose low, medium, or high risk.' });
+  }
+
+  const serverSeed = crypto.randomBytes(32).toString('hex');
+  const fairnessHash = crypto.createHash('sha256').update(serverSeed).digest('hex');
+  const nonce = Date.now();
+  const drop = buildPlinkoDrop({ serverSeed, clientSeed, nonce, rows });
+  const outcome = calculatePlinkoWin({ betCents, rows, risk, binIndex: drop.binIndex });
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const [users] = await connection.execute(
+      'SELECT id, email, balance_cents, is_admin, status FROM users WHERE id = ? FOR UPDATE',
+      [req.user.id]
+    );
+    const user = users[0];
+
+    if (!user) {
+      await connection.rollback();
+      return res.status(401).json({ message: 'User no longer exists.' });
+    }
+
+    if (Number(user.balance_cents) < betCents) {
+      await connection.rollback();
+      return res.status(400).json({ message: 'Insufficient balance for this drop.' });
+    }
+
+    const balanceAfter = Number(user.balance_cents) - betCents + outcome.winCents;
+    const roundPayload = {
+      rows,
+      risk,
+      binIndex: drop.binIndex,
+      path: drop.path,
+      multiplier: outcome.multiplier,
+      fairnessHash,
+      nonce,
+      clientSeed
+    };
+
+    await connection.execute('UPDATE users SET balance_cents = ? WHERE id = ?', [balanceAfter, user.id]);
+    const [spinResult] = await connection.execute(
+      `
+        INSERT INTO slot_spins (user_id, game_code, bet_cents, win_cents, balance_after_cents, reels_json)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `,
+      [
+        user.id,
+        'plinko/plinko-game-online',
+        betCents,
+        outcome.winCents,
+        balanceAfter,
+        JSON.stringify(roundPayload)
+      ]
+    );
+
+    await connection.commit();
+
+    res.json({
+      result: {
+        id: spinResult.insertId,
+        gameCode: 'plinko/plinko-game-online',
+        gameTitle: 'Plinko',
+        source: 'plinko-game-online/plinko-game-online.github.io frontend port with CasUSDT balance settlement',
+        betCents,
+        winCents: outcome.winCents,
+        netCents: outcome.winCents - betCents,
+        rows,
+        risk,
+        binIndex: drop.binIndex,
+        path: drop.path,
+        multiplier: outcome.multiplier,
+        payouts: plinkoPayouts[rows][risk],
+        fairnessHash,
+        nonce,
+        clientSeed
+      },
+      user: publicUser({ ...user, balance_cents: balanceAfter })
+    });
+  } catch (error) {
+    await connection.rollback();
+    console.error(error);
+    res.status(500).json({ message: 'Plinko drop could not be settled.' });
+  } finally {
+    connection.release();
+  }
+});
+
+app.post('/api/admin/open-source-slot/spin', requireUser, requireAdmin, async (req, res) => {
+  const betCents = parseBet(req.body.bet);
+  const clientSeed = String(req.body.clientSeed || req.user.id || 'casusdt-admin').slice(0, 80);
+
+  if (!betCents) {
+    return res.status(400).json({ message: 'Enter a stake from 1 to 1,000.' });
+  }
+
+  const serverSeed = crypto.randomBytes(32).toString('hex');
+  const fairnessHash = crypto.createHash('sha256').update(serverSeed).digest('hex');
+  const nonce = Date.now();
+  const reels = buildOpenSourceSpin({ serverSeed, clientSeed, nonce });
+  const outcome = calculateOpenSourceWin(reels, betCents);
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const [users] = await connection.execute(
+      'SELECT id, email, balance_cents, is_admin, status FROM users WHERE id = ? FOR UPDATE',
+      [req.user.id]
+    );
+    const user = users[0];
+
+    if (!user || !user.is_admin) {
+      await connection.rollback();
+      return res.status(403).json({ message: 'Admin access required.' });
+    }
+
+    if (Number(user.balance_cents) < betCents) {
+      await connection.rollback();
+      return res.status(400).json({ message: 'Insufficient balance for this spin.' });
+    }
+
+    const balanceAfter = Number(user.balance_cents) - betCents + outcome.winCents;
+
+    await connection.execute('UPDATE users SET balance_cents = ? WHERE id = ?', [balanceAfter, user.id]);
+    const [spinResult] = await connection.execute(
+      `
+        INSERT INTO slot_spins (user_id, game_code, bet_cents, win_cents, balance_after_cents, reels_json)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `,
+      [
+        user.id,
+        'opensource/html5-slot-machine',
+        betCents,
+        outcome.winCents,
+        balanceAfter,
+        JSON.stringify(reels)
+      ]
+    );
+
+    await connection.commit();
+
+    res.json({
+      result: {
+        id: spinResult.insertId,
+        gameCode: 'opensource/html5-slot-machine',
+        gameTitle: 'Mystical Forest Adventure',
+        source: 'Mystical Forest Adventure assets with johakr/html5-slot-machine style admin prototype',
+        betCents,
+        winCents: outcome.winCents,
+        netCents: outcome.winCents - betCents,
+        reels,
+        winningLines: outcome.winningLines,
+        fairnessHash,
+        nonce,
+        clientSeed
+      },
+      user: publicUser({ ...user, balance_cents: balanceAfter })
+    });
+  } catch (error) {
+    await connection.rollback();
+    console.error(error);
+    res.status(500).json({ message: 'Open-source slot spin could not be settled.' });
   } finally {
     connection.release();
   }

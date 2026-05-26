@@ -10,6 +10,87 @@ const posthogHost = import.meta.env.VITE_POSTHOG_HOST || 'https://us.i.posthog.c
 const aztecGoldGameCode = 'megajack/aztecgold';
 const slotSymbols = ['7', 'BAR', '$', 'A', 'K', 'Q', 'J', '10', '9', '8', 'WILD', 'BONUS'];
 const aztecSlotSymbols = ['MASK', 'SUN', 'TEMPLE', 'JADE', 'JAGUAR', 'EAGLE', 'A', 'K', 'Q', 'J', 'WILD', 'SCATTER'];
+const mysticalSlotSymbols = ['GOLD', 'GEM', '7', 'BAR', 'BOLT', 'COIN', 'CHRY', 'LEMN', 'WILD', 'SCAT', 'OWL', 'MUSH'];
+const mysticalSheets = {
+  mainGame: {
+    url: '/assets/mystical-forest/mainGameAssets.png',
+    w: 1906,
+    h: 1600,
+    frames: {
+      mainGameLogo: { x: 1, y: 1, w: 480, h: 161 },
+      reelFrame: { x: 1, y: 164, w: 1649, h: 1029 },
+      winBg: { x: 483, y: 1, w: 262, h: 106 },
+      symbol0: { x: 1, y: 1195, w: 254, h: 250 },
+      symbol1: { x: 257, y: 1195, w: 238, h: 237 },
+      symbol2: { x: 1024, y: 1195, w: 224, h: 213 },
+      symbol3: { x: 1250, y: 1195, w: 224, h: 213 },
+      symbol4: { x: 1652, y: 1, w: 253, h: 238 },
+      symbol5: { x: 1652, y: 241, w: 245, h: 270 },
+      symbol6: { x: 1652, y: 513, w: 245, h: 270 },
+      symbol7: { x: 1652, y: 785, w: 245, h: 270 },
+      symbol8: { x: 1652, y: 1057, w: 245, h: 270 },
+      symbol9: { x: 1476, y: 1329, w: 245, h: 270 },
+      symbol10: { x: 497, y: 1195, w: 299, h: 284 },
+      symbol11: { x: 798, y: 1195, w: 224, h: 213 }
+    }
+  },
+  control: {
+    url: '/assets/mystical-forest/controlPanel.png',
+    w: 792,
+    h: 704,
+    frames: {
+      arrowLeft_Idle: { x: 203, y: 1, w: 99, h: 103 },
+      arrowRight_Idle: { x: 1, y: 106, w: 104, h: 103 },
+      Balance_Text: { x: 213, y: 106, w: 182, h: 39 },
+      Bet_Text: { x: 397, y: 106, w: 182, h: 39 },
+      Win_Text: { x: 1, y: 353, w: 182, h: 39 },
+      woodframe: { x: 213, y: 147, w: 379, h: 94 },
+      info_Idle: { x: 205, y: 243, w: 100, h: 101 },
+      spin_Idle: { x: 177, y: 419, w: 174, h: 174 },
+      spin_Pressed: { x: 353, y: 419, w: 174, h: 174 },
+      spin_Disabled: { x: 409, y: 243, w: 174, h: 174 }
+    }
+  },
+  paytableBg: {
+    url: '/assets/mystical-forest/paytableBg.png',
+    w: 2048,
+    h: 1024,
+    frames: {
+      paytableBg: { x: 1, y: 1, w: 2046, h: 1022 }
+    }
+  },
+  paytable: {
+    url: '/assets/mystical-forest/paytableAssets1.png',
+    w: 4573,
+    h: 2302,
+    frames: {
+      symbols: { x: 1613, y: 681, w: 1962, h: 654 },
+      Scatter_symbol: { x: 1613, y: 203, w: 429, h: 399 }
+    }
+  }
+};
+const mysticalSymbolFrames = {
+  GOLD: 'symbol0',
+  GEM: 'symbol1',
+  7: 'symbol2',
+  BAR: 'symbol3',
+  BOLT: 'symbol4',
+  COIN: 'symbol5',
+  CHRY: 'symbol6',
+  LEMN: 'symbol7',
+  WILD: 'symbol8',
+  SCAT: 'symbol9',
+  OWL: 'symbol10',
+  MUSH: 'symbol11'
+};
+
+const defaultMysticalReels = [
+  [{ icon: 'GOLD' }, { icon: 'GEM' }, { icon: '7' }],
+  [{ icon: 'BAR' }, { icon: 'BOLT' }, { icon: 'COIN' }],
+  [{ icon: 'CHRY' }, { icon: 'LEMN' }, { icon: 'GOLD' }],
+  [{ icon: 'GEM' }, { icon: '7' }, { icon: 'BAR' }],
+  [{ icon: 'BOLT' }, { icon: 'COIN' }, { icon: 'CHRY' }]
+];
 const defaultReels = [
   [{ icon: '7' }, { icon: 'BAR' }, { icon: '$' }],
   [{ icon: 'A' }, { icon: '7' }, { icon: 'K' }],
@@ -50,7 +131,6 @@ const paylinePatterns = [
   [2, 2, 2, 1, 0],
   [1, 0, 1, 0, 1]
 ];
-
 if (posthogToken) {
   posthog.init(posthogToken, {
     api_host: posthogHost,
@@ -94,6 +174,63 @@ function slotSymbolIcon(symbol) {
   };
 
   return symbolMap[raw] || raw;
+}
+
+function mysticalSymbolLabel(symbol) {
+  return String(symbol?.icon || symbol?.id || 'GOLD').toUpperCase();
+}
+
+function mysticalSpriteStyle(sheetName, frameName) {
+  const sheet = mysticalSheets[sheetName];
+  const frame = sheet?.frames?.[frameName];
+
+  if (!sheet || !frame) {
+    return {};
+  }
+
+  const positionX = sheet.w === frame.w ? 0 : (frame.x / (sheet.w - frame.w)) * 100;
+  const positionY = sheet.h === frame.h ? 0 : (frame.y / (sheet.h - frame.h)) * 100;
+
+  return {
+    aspectRatio: `${frame.w} / ${frame.h}`,
+    backgroundImage: `url('${sheet.url}')`,
+    backgroundSize: `${(sheet.w / frame.w) * 100}% ${(sheet.h / frame.h) * 100}%`,
+    backgroundPosition: `${positionX}% ${positionY}%`
+  };
+}
+
+function mysticalSymbolStyle(symbol) {
+  const key = mysticalSymbolLabel(symbol);
+  return mysticalSpriteStyle('mainGame', mysticalSymbolFrames[key] || 'symbol0');
+}
+
+function playAdminSlotSound(kind) {
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+
+  if (!AudioContext) {
+    return;
+  }
+
+  const context = new AudioContext();
+  const master = context.createGain();
+  master.gain.value = kind === 'win' ? 0.1 : 0.045;
+  master.connect(context.destination);
+
+  const tones = kind === 'win' ? [523, 659, 784, 1046] : [164, 196, 246];
+  tones.forEach((frequency, index) => {
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.type = kind === 'win' ? 'triangle' : 'sawtooth';
+    oscillator.frequency.setValueAtTime(frequency, context.currentTime + index * 0.06);
+    gain.gain.setValueAtTime(0.001, context.currentTime + index * 0.06);
+    gain.gain.exponentialRampToValueAtTime(0.6, context.currentTime + index * 0.06 + 0.025);
+    gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + index * 0.06 + 0.18);
+    oscillator.connect(gain).connect(master);
+    oscillator.start(context.currentTime + index * 0.06);
+    oscillator.stop(context.currentTime + index * 0.06 + 0.22);
+  });
+
+  setTimeout(() => context.close(), kind === 'win' ? 650 : 420);
 }
 
 function randomSlotSymbol(symbolPool = slotSymbols) {
@@ -156,9 +293,13 @@ function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [amount, setAmount] = useState('250');
+  const [withdrawAmount, setWithdrawAmount] = useState('');
+  const [walletAddress, setWalletAddress] = useState('');
+  const [cashierTab, setCashierTab] = useState('deposit');
   const [message, setMessage] = useState('');
   const [user, setUser] = useState(null);
   const [deposits, setDeposits] = useState([]);
+  const [withdrawals, setWithdrawals] = useState([]);
   const [slotSession, setSlotSession] = useState(null);
   const [slotGames, setSlotGames] = useState([]);
   const [selectedSlotGameCode, setSelectedSlotGameCode] = useState('ctinteractive/luckydollar');
@@ -167,6 +308,18 @@ function App() {
   const [slotResult, setSlotResult] = useState(null);
   const [animatedReels, setAnimatedReels] = useState(null);
   const [slotSpinPhase, setSlotSpinPhase] = useState('idle');
+  const [aviatorBet, setAviatorBet] = useState('1');
+  const [aviatorRound, setAviatorRound] = useState(null);
+  const [aviatorMultiplier, setAviatorMultiplier] = useState(1);
+  const [aviatorResult, setAviatorResult] = useState(null);
+  const [aviatorBusy, setAviatorBusy] = useState(false);
+  const [aviatorHistory, setAviatorHistory] = useState(['1.34x', '2.08x', '1.11x', '4.72x', '1.86x', '7.40x']);
+  const [aviatorTarget, setAviatorTarget] = useState(1.5);
+  const [adminOpenSourceBet, setAdminOpenSourceBet] = useState('1');
+  const [adminOpenSourceResult, setAdminOpenSourceResult] = useState(null);
+  const [adminOpenSourceSpinning, setAdminOpenSourceSpinning] = useState(false);
+  const [adminOpenSourceReels, setAdminOpenSourceReels] = useState(defaultMysticalReels);
+  const [adminOpenSourcePaytableOpen, setAdminOpenSourcePaytableOpen] = useState(false);
   const [adminUsers, setAdminUsers] = useState([]);
   const [selectedAdminUserId, setSelectedAdminUserId] = useState('');
   const [selectedAdminSlotGameCode, setSelectedAdminSlotGameCode] = useState('ctinteractive/luckydollar');
@@ -189,10 +342,11 @@ function App() {
   });
   const [loading, setLoading] = useState(false);
   const [depositing, setDepositing] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
   const [spinning, setSpinning] = useState(false);
   const [adminSaving, setAdminSaving] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [isNavigationOpen, setIsNavigationOpen] = useState(false);
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const emailInputRef = useRef(null);
 
   const token = localStorage.getItem('authToken');
@@ -230,6 +384,12 @@ function App() {
   ];
   const visibleGames = games.filter((game) => game.enabled !== false);
   const isSelectedSlotDisabled = slotSession?.enabled === false;
+  const crashRocketProgress = Math.min((aviatorMultiplier - 1) / 9, 1);
+  const crashRocketStyle = {
+    left: `${8 + crashRocketProgress * 72}%`,
+    bottom: `${14 + Math.pow(crashRocketProgress, 1.8) * 62}%`,
+    transform: `rotate(${70 - crashRocketProgress * 86}deg)`
+  };
 
   const passwordHint = useMemo(() => {
     if (mode === 'login') {
@@ -255,8 +415,64 @@ function App() {
   }, [user]);
 
   useEffect(() => {
-    setIsNavigationOpen(false);
-  }, [activeView, user]);
+    if (!aviatorRound || aviatorRound.crashed) {
+      return undefined;
+    }
+
+    const interval = window.setInterval(async () => {
+      try {
+        const data = await apiRequest(`/api/aviator/rounds/${aviatorRound.id}`);
+        setAviatorRound(data.round);
+        setAviatorMultiplier(data.round.multiplier);
+
+        if (data.round.crashed) {
+          setAviatorHistory((history) => [
+            `${data.round.multiplier.toFixed(2)}x`,
+            ...history
+          ].slice(0, 12));
+          setAviatorResult({
+            crashed: true,
+            multiplier: data.round.multiplier,
+            betCents: data.round.betCents,
+            winCents: 0,
+            netCents: -data.round.betCents
+          });
+          setAviatorRound(null);
+          setMessage(`Crash game ended at ${data.round.multiplier.toFixed(2)}x.`);
+          return;
+        }
+
+        if (data.round.multiplier >= aviatorTarget && !aviatorBusy) {
+          setAviatorBusy(true);
+          const cashout = await apiRequest(`/api/aviator/rounds/${aviatorRound.id}/cashout`, {
+            method: 'POST'
+          });
+
+          setUser(cashout.user);
+          setAviatorRound(null);
+          setAviatorResult(cashout.result);
+          setAviatorMultiplier(cashout.result.multiplier);
+          setAviatorHistory((history) => [
+            `${cashout.result.multiplier.toFixed(2)}x`,
+            ...history
+          ].slice(0, 12));
+          trackEvent('crash_round_auto_cashed_out', {
+            betCents: cashout.result.betCents,
+            winCents: cashout.result.winCents,
+            multiplier: cashout.result.multiplier,
+            target: aviatorTarget
+          });
+          setMessage(`Crash auto cashed out at ${cashout.result.multiplier.toFixed(2)}x for ${formatMoney(cashout.result.winCents)}.`);
+        }
+      } catch (_error) {
+        setAviatorRound(null);
+      } finally {
+        setAviatorBusy(false);
+      }
+    }, 120);
+
+    return () => window.clearInterval(interval);
+  }, [aviatorRound?.id, aviatorRound?.crashed, aviatorBusy, aviatorTarget]);
 
   useEffect(() => {
     async function restoreSession() {
@@ -268,6 +484,7 @@ function App() {
         const response = await apiRequest('/api/me');
         setUser(response.user);
         await loadDeposits();
+        await loadWithdrawals();
         await loadSlotGames();
         await loadSlotSession();
         await loadSlotHistory();
@@ -323,6 +540,11 @@ function App() {
   async function loadDeposits() {
     const data = await apiRequest('/api/deposits');
     setDeposits(data.deposits || []);
+  }
+
+  async function loadWithdrawals() {
+    const data = await apiRequest('/api/withdrawals');
+    setWithdrawals(data.withdrawals || []);
   }
 
   async function loadSlotGames() {
@@ -529,6 +751,7 @@ function App() {
       setMessage(mode === 'login' ? 'Welcome back.' : 'Membership profile created.');
       setPassword('');
       await loadDeposits();
+      await loadWithdrawals();
       await loadSlotGames();
       await loadSlotSession();
       await loadSlotHistory();
@@ -600,6 +823,38 @@ function App() {
     }
   }
 
+  async function withdraw(event) {
+    event.preventDefault();
+    setWithdrawing(true);
+    setMessage('');
+
+    try {
+      const data = await apiRequest('/api/withdrawals', {
+        method: 'POST',
+        body: JSON.stringify({ amount: withdrawAmount, walletAddress, currency: 'USD' })
+      });
+
+      setWithdrawals((current) => [data.withdrawal, ...current].slice(0, 10));
+      trackEvent('withdrawal_created', {
+        withdrawalId: data.withdrawal.id,
+        amountCents: data.withdrawal.amountCents,
+        currency: data.withdrawal.currency,
+        status: data.withdrawal.status
+      });
+      setWithdrawAmount('');
+      setWalletAddress('');
+      setMessage('Withdrawal request created. It is pending review.');
+    } catch (error) {
+      trackEvent('withdrawal_failed', {
+        reason: error.message,
+        amount: withdrawAmount
+      });
+      setMessage(error.message);
+    } finally {
+      setWithdrawing(false);
+    }
+  }
+
   async function spinSlot() {
     setSpinning(true);
     setSlotSpinPhase('rolling');
@@ -649,6 +904,121 @@ function App() {
     }
   }
 
+  async function startAviatorRound() {
+    setAviatorBusy(true);
+    setAviatorResult(null);
+    setMessage('');
+
+    try {
+      const data = await apiRequest('/api/aviator/rounds', {
+        method: 'POST',
+        body: JSON.stringify({
+          bet: aviatorBet,
+          clientSeed: `casusdt-${user?.id || 'guest'}-${Date.now()}`
+        })
+      });
+
+      setUser(data.user);
+      setAviatorRound(data.round);
+      setAviatorMultiplier(data.round.multiplier || 1);
+      trackEvent('crash_round_started', {
+        betCents: data.round.betCents,
+        roundId: data.round.id,
+        target: aviatorTarget
+      });
+    } catch (error) {
+      setMessage(error.message);
+      trackEvent('crash_round_failed', {
+        reason: error.message
+      });
+    } finally {
+      setAviatorBusy(false);
+    }
+  }
+
+  async function cashOutAviatorRound() {
+    if (!aviatorRound) {
+      return;
+    }
+
+    setAviatorBusy(true);
+    setMessage('');
+
+    try {
+      const data = await apiRequest(`/api/aviator/rounds/${aviatorRound.id}/cashout`, {
+        method: 'POST'
+      });
+
+      setUser(data.user);
+      setAviatorRound(null);
+      setAviatorResult(data.result);
+      setAviatorMultiplier(data.result.multiplier);
+      setAviatorHistory((history) => [
+        `${data.result.multiplier.toFixed(2)}x`,
+        ...history
+      ].slice(0, 12));
+      trackEvent('crash_round_cashed_out', {
+        betCents: data.result.betCents,
+        winCents: data.result.winCents,
+        multiplier: data.result.multiplier
+      });
+      setMessage(`Crash cashed out at ${data.result.multiplier.toFixed(2)}x for ${formatMoney(data.result.winCents)}.`);
+    } catch (error) {
+      setAviatorRound(null);
+      setAviatorResult(error.result || null);
+      setMessage(error.message);
+      trackEvent('crash_cashout_failed', {
+        reason: error.message
+      });
+    } finally {
+      setAviatorBusy(false);
+    }
+  }
+
+  async function spinAdminOpenSourceSlot() {
+    setAdminOpenSourceSpinning(true);
+    setAdminOpenSourceReels(buildAnimatedReels(mysticalSlotSymbols));
+    setMessage('');
+    playAdminSlotSound('spin');
+
+    try {
+      const data = await slotRequest('/admin/open-source-slot/spin', {
+        method: 'POST',
+        body: JSON.stringify({
+          bet: adminOpenSourceBet,
+          clientSeed: `admin-${user?.id || 'casusdt'}`
+        })
+      });
+
+      setAdminOpenSourceReels(buildSettlingReels(data.result.reels || defaultMysticalReels, mysticalSlotSymbols));
+      await new Promise((resolve) => setTimeout(resolve, spinAnimationMs));
+      setUser(data.user);
+      setAdminOpenSourceResult(data.result);
+      setAdminOpenSourceReels(data.result.reels || defaultMysticalReels);
+      if (data.result.winCents > 0) {
+        playAdminSlotSound('win');
+      }
+      trackEvent('admin_open_source_slot_spin_completed', {
+        betCents: data.result.betCents,
+        winCents: data.result.winCents,
+        netCents: data.result.netCents
+      });
+      setMessage(
+        data.result.winCents > 0
+          ? `Open-source slot paid ${formatMoney(data.result.winCents)}.`
+          : 'No win on this admin test spin.'
+      );
+    } catch (error) {
+      setAdminOpenSourceReels(defaultMysticalReels);
+      trackEvent('admin_open_source_slot_spin_failed', {
+        reason: error.message
+      });
+      setMessage(error.message);
+    } finally {
+      setAdminOpenSourceSpinning(false);
+    }
+  }
+
   async function openSlotGame(game) {
     if (game.enabled === false) {
       setMessage('This slot is currently disabled.');
@@ -685,7 +1055,7 @@ function App() {
   function logout() {
     trackEvent('logout');
     setShowLogoutConfirm(false);
-    setIsNavigationOpen(false);
+    setMobileDrawerOpen(false);
     localStorage.removeItem('authToken');
     setUser(null);
     setDeposits([]);
@@ -694,18 +1064,77 @@ function App() {
     setSelectedSlotGameCode('ctinteractive/luckydollar');
     setSlotHistory([]);
     setSlotResult(null);
+    setAviatorRound(null);
+    setAviatorResult(null);
+    setAviatorMultiplier(1);
     setAdminUsers([]);
     setSelectedAdminUserId('');
     setSelectedAdminSlotGameCode('ctinteractive/luckydollar');
     setSlotConfig(null);
+    setAdminOpenSourceBet('1');
+    setAdminOpenSourceResult(null);
+    setAdminOpenSourceSpinning(false);
+    setAdminOpenSourceReels(defaultMysticalReels);
+    setAdminOpenSourcePaytableOpen(false);
     setPassword('');
     setMessage('Signed out.');
   }
 
-  function openView(view) {
-    setActiveView(view);
-    setIsNavigationOpen(false);
+  function showMemberView(nextView) {
+    setActiveView(nextView);
+    setMobileDrawerOpen(false);
   }
+
+  const navigationItems = user
+    ? [
+        {
+          key: 'cashier',
+          label: 'Cashier',
+          description: 'Balance and deposits',
+          active: activeView === 'cashier',
+          onSelect: () => showMemberView('cashier')
+        },
+        {
+          key: 'games',
+          label: 'Games',
+          description: 'Slots catalogue',
+          active: activeView === 'games' || activeView === 'slot',
+          onSelect: () => showMemberView('games')
+        },
+        {
+          key: 'plinko',
+          label: 'Plinko',
+          description: 'Drop balls with balance',
+          active: activeView === 'plinko',
+          onSelect: () => showMemberView('plinko')
+        },
+        ...(user.isAdmin
+          ? [
+              {
+                key: 'aviator',
+                label: 'Crash',
+                description: 'Rocket multiplier game',
+                active: activeView === 'aviator',
+                onSelect: () => showMemberView('aviator')
+              },
+              {
+                key: 'admin',
+                label: 'Admin panel',
+                description: 'Operations control',
+                active: activeView === 'admin',
+                onSelect: () => showMemberView('admin')
+              },
+              {
+                key: 'admin-open-source-slot',
+                label: 'Open-source slot',
+                description: 'Admin-only game lab',
+                active: activeView === 'admin-open-source-slot',
+                onSelect: () => showMemberView('admin-open-source-slot')
+              }
+            ]
+          : [])
+      ]
+    : [];
 
   return (
     <main className="auth-page">
@@ -714,15 +1143,15 @@ function App() {
           {user && (
             <button
               type="button"
-              className="menu-toggle"
-              aria-label="Open navigation"
-              aria-controls="memberNavigation"
-              aria-expanded={isNavigationOpen}
-              onClick={() => setIsNavigationOpen((isOpen) => !isOpen)}
+              className="mobile-menu-button"
+              aria-label="Open account navigation"
+              aria-expanded={mobileDrawerOpen}
+              aria-controls="mobileMemberDrawer"
+              onClick={() => setMobileDrawerOpen(true)}
             >
-              <span aria-hidden="true"></span>
-              <span aria-hidden="true"></span>
-              <span aria-hidden="true"></span>
+              <span aria-hidden="true" />
+              <span aria-hidden="true" />
+              <span aria-hidden="true" />
             </button>
           )}
 
@@ -797,47 +1226,83 @@ function App() {
         </div>
       )}
 
+      {user && (
+        <div
+          className={'mobile-drawer-backdrop ' + (mobileDrawerOpen ? 'open' : '')}
+          role="presentation"
+          onClick={() => setMobileDrawerOpen(false)}
+        >
+          <nav
+            id="mobileMemberDrawer"
+            className="mobile-member-drawer"
+            aria-label="Account navigation"
+            aria-hidden={!mobileDrawerOpen}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mobile-drawer-head">
+              <div>
+                <strong>CasUSDT.com</strong>
+                <small>{user.email}</small>
+              </div>
+              <button
+                type="button"
+                className="drawer-close"
+                aria-label="Close account navigation"
+                onClick={() => setMobileDrawerOpen(false)}
+              >
+                X
+              </button>
+            </div>
+
+            <div className="mobile-drawer-balance">
+              <span>Balance</span>
+              <strong>{formatMoney(user.balanceCents)}</strong>
+            </div>
+
+            <div className="mobile-drawer-nav">
+              {navigationItems.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  className={item.active ? 'active' : ''}
+                  onClick={item.onSelect}
+                >
+                  <span>{item.label}</span>
+                  <small>{item.description}</small>
+                </button>
+              ))}
+              <button
+                type="button"
+                className="drawer-logout"
+                onClick={() => {
+                  setMobileDrawerOpen(false);
+                  setShowLogoutConfirm(true);
+                }}
+              >
+                <span>Logout</span>
+                <small>End current session</small>
+              </button>
+            </div>
+          </nav>
+        </div>
+      )}
+
       <section className="auth-shell container">
         <div className="app-stage">
           {user ? (
             <div className="member-layout">
-              <button
-                type="button"
-                className={`drawer-backdrop ${isNavigationOpen ? 'is-visible' : ''}`}
-                aria-label="Close navigation"
-                onClick={() => setIsNavigationOpen(false)}
-              ></button>
-              <aside
-                id="memberNavigation"
-                className={`member-sidebar ${isNavigationOpen ? 'is-open' : ''}`}
-                aria-label="Account navigation"
-              >
-                <button
-                  type="button"
-                  className={activeView === 'cashier' ? 'active' : ''}
-                  onClick={() => openView('cashier')}
-                >
-                  <span>Cashier</span>
-                  <small>Balance and deposits</small>
-                </button>
-                <button
-                  type="button"
-                  className={activeView === 'games' || activeView === 'slot' ? 'active' : ''}
-                  onClick={() => openView('games')}
-                >
-                  <span>Games</span>
-                  <small>Slots catalogue</small>
-                </button>
-                {user.isAdmin && (
+              <aside className="member-sidebar" aria-label="Account navigation">
+                {navigationItems.map((item) => (
                   <button
+                    key={item.key}
                     type="button"
-                    className={activeView === 'admin' ? 'active' : ''}
-                    onClick={() => openView('admin')}
+                    className={item.active ? 'active' : ''}
+                    onClick={item.onSelect}
                   >
-                    <span>Admin panel</span>
-                    <small>Operations control</small>
+                    <span>{item.label}</span>
+                    <small>{item.description}</small>
                   </button>
-                )}
+                ))}
               </aside>
 
               <div className="player-grid">
@@ -845,8 +1310,7 @@ function App() {
               <div className="auth-card cashier-card shadow-lg">
                 <div className="cashier-head">
                   <div>
-                    <span className="eyebrow compact">Cashier</span>
-                    <h2>Deposit funds</h2>
+                    <h2>Cashier</h2>
                   </div>
                   <div className="vault-balance">
                     <span>Available</span>
@@ -854,53 +1318,130 @@ function App() {
                   </div>
                 </div>
 
-                <form className="deposit-form" onSubmit={deposit}>
-                  <label className="form-label" htmlFor="amount">Deposit amount</label>
-                  <div className="deposit-control">
-                    <span>$</span>
-                    <input
-                      id="amount"
-                      className="form-control form-control-lg"
-                      type="number"
-                      min="1"
-                      max="10000"
-                      step="0.01"
-                      value={amount}
-                      onChange={(event) => setAmount(event.target.value)}
-                      required
-                    />
-                    <button className="btn btn-primary btn-lg" type="submit" disabled={depositing}>
-                      {depositing ? 'Processing...' : 'Deposit'}
-                    </button>
-                  </div>
-                </form>
-
-                <div className="quick-amounts" aria-label="Quick deposit amounts">
-                  {['100', '250', '500', '1000'].map((value) => (
-                    <button key={value} type="button" className="btn btn-outline-primary btn-sm" onClick={() => setAmount(value)}>
-                      {formatMoney(Number(value) * 100)}
-                    </button>
-                  ))}
+                <div className="cashier-tabs" role="tablist" aria-label="Cashier actions">
+                  <button
+                    type="button"
+                    className={cashierTab === 'deposit' ? 'active' : ''}
+                    role="tab"
+                    aria-selected={cashierTab === 'deposit'}
+                    onClick={() => setCashierTab('deposit')}
+                  >
+                    Deposit
+                  </button>
+                  <button
+                    type="button"
+                    className={cashierTab === 'withdraw' ? 'active' : ''}
+                    role="tab"
+                    aria-selected={cashierTab === 'withdraw'}
+                    onClick={() => setCashierTab('withdraw')}
+                  >
+                    Withdraw
+                  </button>
                 </div>
 
-                <div className="deposit-history">
-                  <h3>Recent deposits</h3>
-                  {deposits.length === 0 ? (
-                    <p className="text-secondary mb-0">No cashier activity yet.</p>
-                  ) : (
-                    <ul>
-                      {deposits.map((item) => (
-                        <li key={item.id}>
-                          <span>
-                            <strong>{formatMoney(item.amountCents)}</strong>
-                            <small>{item.status}</small>
-                          </span>
-                          <span>{item.currency}</span>
-                        </li>
+                {cashierTab === 'deposit' ? (
+                  <>
+                    <form className="deposit-form" onSubmit={deposit}>
+                      <label className="form-label" htmlFor="amount">Deposit amount</label>
+                      <div className="deposit-control">
+                        <span>$</span>
+                        <input
+                          id="amount"
+                          className="form-control form-control-lg"
+                          type="number"
+                          min="1"
+                          max="10000"
+                          step="0.01"
+                          value={amount}
+                          onChange={(event) => setAmount(event.target.value)}
+                          required
+                        />
+                        <button className="btn btn-primary btn-lg" type="submit" disabled={depositing}>
+                          {depositing ? 'Processing...' : 'Deposit'}
+                        </button>
+                      </div>
+                    </form>
+
+                    <div className="quick-amounts" aria-label="Quick deposit amounts">
+                      {['100', '250', '500', '1000'].map((value) => (
+                        <button key={value} type="button" className="btn btn-outline-primary btn-sm" onClick={() => setAmount(value)}>
+                          {formatMoney(Number(value) * 100)}
+                        </button>
                       ))}
-                    </ul>
-                  )}
-                </div>
+                    </div>
+
+                    <div className="deposit-history">
+                      <h3>Recent deposits</h3>
+                      {deposits.length === 0 ? (
+                        <p className="text-secondary mb-0">No cashier activity yet.</p>
+                      ) : (
+                        <ul>
+                          {deposits.map((item) => (
+                            <li key={item.id}>
+                              <span>
+                                <strong>{formatMoney(item.amountCents)}</strong>
+                                <small>{item.status}</small>
+                              </span>
+                              <span>{item.currency}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <form className="deposit-form withdraw-form" onSubmit={withdraw}>
+                      <label className="form-label" htmlFor="withdraw-amount">Withdraw amount</label>
+                      <div className="deposit-control withdraw-control">
+                        <span>$</span>
+                        <input
+                          id="withdraw-amount"
+                          className="form-control form-control-lg"
+                          type="number"
+                          min="1"
+                          max="10000"
+                          step="0.01"
+                          value={withdrawAmount}
+                          onChange={(event) => setWithdrawAmount(event.target.value)}
+                          required
+                        />
+                      </div>
+                      <label className="form-label" htmlFor="wallet-address">Wallet address</label>
+                      <input
+                        id="wallet-address"
+                        className="form-control form-control-lg"
+                        type="text"
+                        value={walletAddress}
+                        onChange={(event) => setWalletAddress(event.target.value)}
+                        autoComplete="off"
+                        required
+                      />
+                      <button className="btn btn-primary btn-lg withdraw-submit" type="submit" disabled={withdrawing}>
+                        {withdrawing ? 'Creating request...' : 'Confirm withdrawal'}
+                      </button>
+                    </form>
+
+                    <div className="deposit-history">
+                      <h3>Recent withdrawals</h3>
+                      {withdrawals.length === 0 ? (
+                        <p className="text-secondary mb-0">No withdrawal requests yet.</p>
+                      ) : (
+                        <ul>
+                          {withdrawals.map((item) => (
+                            <li key={item.id}>
+                              <span>
+                                <strong>{formatMoney(item.amountCents)}</strong>
+                                <small>{item.status}</small>
+                              </span>
+                              <span>{item.currency}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </>
+                )}
 
                 {message && (
                   <div className="alert alert-info mt-4 mb-0" role="status">
@@ -914,7 +1455,6 @@ function App() {
                 <div className="auth-card games-card shadow-lg">
                   <div className="cashier-head">
                     <div>
-                      <span className="eyebrow compact">Games</span>
                       <h2>Available slots</h2>
                       <p className="text-secondary mb-0">Choose a game to open the dedicated slot page.</p>
                     </div>
@@ -939,6 +1479,164 @@ function App() {
                       );
                     })}
                   </div>
+                </div>
+              )}
+
+              {activeView === 'plinko' && (
+                <div className="plinko-direct-card">
+                  <iframe
+                    className="plinko-embed"
+                    title="Plinko Game"
+                    src="/plinko/index.html"
+                    loading="lazy"
+                  />
+                </div>
+              )}
+
+              {user.isAdmin && activeView === 'aviator' && (
+                <div className="hi-aviator-shell">
+                  <div className="hi-aviator-topbar">
+                    <div className="hi-aviator-brand">
+                      <span className="hi-aviator-mark">C</span>
+                      <div>
+                        <h2>Crash</h2>
+                        <p>Rocket multiplier game connected to your CasUSDT balance.</p>
+                      </div>
+                    </div>
+                    <div className="hi-aviator-balance">
+                      <span>Balance</span>
+                      <strong>{formatMoney(user.balanceCents)}</strong>
+                    </div>
+                  </div>
+
+                  <div className="hi-aviator-history" aria-label="Recent Crash multipliers">
+                    {aviatorHistory.map((item, index) => (
+                      <span
+                        key={`${item}-${index}`}
+                        className={Number(item.replace('x', '')) >= 2 ? 'is-hot' : ''}
+                      >
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div className={'hi-aviator-stage ' + (aviatorRound ? 'is-flying' : aviatorResult?.crashed ? 'is-crashed' : '')}>
+                    <div className="hi-crash-stars hi-crash-stars-one" aria-hidden="true" />
+                    <div className="hi-crash-stars hi-crash-stars-two" aria-hidden="true" />
+                    <div className="hi-crash-stars hi-crash-stars-three" aria-hidden="true" />
+                    <div className="hi-crash-speed-lines" aria-hidden="true" />
+                    <img className="hi-crash-rocket" src="/assets/crash-rocket.gif" alt="" style={crashRocketStyle} />
+                    <div className={'hi-aviator-multiplier ' + (aviatorResult?.crashed ? 'is-crashed' : aviatorResult ? 'is-win' : '')} aria-live="polite">
+                      {aviatorMultiplier.toFixed(2)}x
+                    </div>
+                    <div className="hi-aviator-state">
+                      {aviatorRound
+                        ? `Target ${aviatorTarget.toFixed(2)}x. Cash out manually or let auto cashout trigger.`
+                        : aviatorResult
+                          ? aviatorResult.crashed
+                            ? 'Rocket crashed before target.'
+                            : `You took ${formatMoney(aviatorResult.winCents)}.`
+                          : 'Choose a target multiplier and launch the next round.'}
+                    </div>
+                  </div>
+
+                  <div className="hi-aviator-betboards">
+                    {[0, 1].map((panelIndex) => {
+                      const isLivePanel = panelIndex === 0;
+
+                      return (
+                        <div className="hi-aviator-betboard" key={panelIndex}>
+                          <div className="hi-aviator-tabs">
+                            <button type="button" className="active">Bet</button>
+                            <button type="button" disabled>Auto</button>
+                          </div>
+                          <div className="hi-aviator-stake">
+                            <button
+                              type="button"
+                              disabled={!isLivePanel || Boolean(aviatorRound)}
+                              onClick={() => setAviatorBet((current) => String(Math.max(1, Number(current || 0) - 1)))}
+                            >
+                              -
+                            </button>
+                            <input
+                              id={isLivePanel ? 'aviatorBet' : undefined}
+                              aria-label={isLivePanel ? 'Crash bet amount' : 'Inactive bet panel amount'}
+                              type="number"
+                              min="1"
+                              max="10000"
+                              step="1"
+                              value={isLivePanel ? aviatorBet : '10'}
+                              disabled={!isLivePanel || Boolean(aviatorRound)}
+                              onChange={(event) => setAviatorBet(event.target.value)}
+                            />
+                            <button
+                              type="button"
+                              disabled={!isLivePanel || Boolean(aviatorRound)}
+                              onClick={() => setAviatorBet((current) => String(Math.max(1, Number(current || 0) + 1)))}
+                            >
+                              +
+                            </button>
+                          </div>
+                          <div className="hi-aviator-chips">
+                            {[10, 20, 50, 100].map((chip) => (
+                              <button
+                                key={chip}
+                                type="button"
+                                disabled={!isLivePanel || Boolean(aviatorRound)}
+                                onClick={() => setAviatorBet(String(chip))}
+                              >
+                                {chip}
+                              </button>
+                            ))}
+                          </div>
+                          {isLivePanel && (
+                            <div className="hi-crash-target">
+                              <div>
+                                <span>Target multiplier</span>
+                                <strong>{aviatorTarget.toFixed(2)}x</strong>
+                              </div>
+                              <input
+                                aria-label="Crash target multiplier"
+                                type="range"
+                                min="1.1"
+                                max="10"
+                                step="0.1"
+                                value={aviatorTarget}
+                                disabled={Boolean(aviatorRound)}
+                                onChange={(event) => setAviatorTarget(Number(event.target.value))}
+                              />
+                            </div>
+                          )}
+                          {isLivePanel ? (
+                            aviatorRound ? (
+                              <button className="hi-aviator-cashout" type="button" disabled={aviatorBusy} onClick={cashOutAviatorRound}>
+                                <span>Cash out</span>
+                                <strong>{formatMoney(Math.floor(aviatorRound.betCents * aviatorMultiplier))}</strong>
+                              </button>
+                            ) : (
+                              <button className="hi-aviator-bet" type="button" disabled={aviatorBusy} onClick={startAviatorRound}>
+                                <span>{aviatorBusy ? 'Launching...' : 'Launch'}</span>
+                                <strong>{formatMoney(Math.round(Number(aviatorBet || 0) * 100))}</strong>
+                              </button>
+                            )
+                          ) : (
+                            <button className="hi-aviator-bet is-disabled" type="button" disabled>
+                              <span>Bet</span>
+                              <strong>{formatMoney(1000)}</strong>
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {aviatorResult && (
+                    <div className="hi-aviator-result">
+                      <span>{aviatorResult.crashed ? 'Crashed' : 'Cashed out'}</span>
+                      <strong>{aviatorResult.multiplier.toFixed(2)}x</strong>
+                      <small>Net {formatMoney(aviatorResult.netCents)}</small>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1070,7 +1768,6 @@ function App() {
                 <div className="auth-card admin-card shadow-lg">
                   <div className="cashier-head">
                     <div>
-                      <span className="eyebrow compact">Admin panel</span>
                       <h2>Operations control</h2>
                       <p className="text-secondary mb-0">Visible only to admin users. Manage accounts, balances, and slot configuration.</p>
                     </div>
@@ -1298,6 +1995,126 @@ function App() {
                       </div>
                     )}
                   </section>
+                </div>
+              )}
+
+              {user.isAdmin && activeView === 'admin-open-source-slot' && (
+                <div className="admin-open-source-card mystical-game-card">
+                  <div className="mystical-game-viewport">
+                    <section className="mystical-game-stage" aria-label="Mystical Forest Adventure admin slot">
+                      <div className="mystical-background" />
+                      <div className="mystical-logo" style={mysticalSpriteStyle('mainGame', 'mainGameLogo')} />
+                      <div className="mystical-reel-frame" style={mysticalSpriteStyle('mainGame', 'reelFrame')} />
+                      <div className="mystical-reels-window">
+                        <div className="mystical-reels" aria-label="Admin open-source slot reels">
+                          {adminOpenSourceReels.map((reel, reelIndex) => (
+                            <div
+                              className={`mystical-reel ${adminOpenSourceSpinning ? 'is-rolling' : ''}`}
+                              key={reelIndex}
+                              style={adminOpenSourceSpinning ? {
+                                '--spin-duration': `${1700 + reelIndex * 160}ms`
+                              } : undefined}
+                            >
+                              <div className="mystical-reel-strip">
+                                {reel.map((symbol, rowIndex) => (
+                                  <span
+                                    className="mystical-symbol"
+                                    key={`${reelIndex}-${rowIndex}-${symbol.icon}`}
+                                    style={mysticalSymbolStyle(symbol)}
+                                    aria-label={mysticalSymbolLabel(symbol)}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="mystical-ticker">
+                        <span className="mystical-panel-bg" style={mysticalSpriteStyle('control', 'woodframe')} />
+                        <strong>{adminOpenSourceSpinning ? 'SPINNING' : adminOpenSourceResult?.winCents > 0 ? `WIN ${formatMoney(adminOpenSourceResult.winCents)}` : 'GOOD LUCK'}</strong>
+                      </div>
+                      <div className="mystical-meter mystical-meter-balance">
+                        <span className="mystical-panel-bg" style={mysticalSpriteStyle('control', 'woodframe')} />
+                        <span className="mystical-label-sprite" style={mysticalSpriteStyle('control', 'Balance_Text')} />
+                        <strong>{formatMoney(user.balanceCents)}</strong>
+                      </div>
+                      <div className="mystical-meter mystical-meter-win">
+                        <span className="mystical-panel-bg" style={mysticalSpriteStyle('control', 'woodframe')} />
+                        <span className="mystical-label-sprite" style={mysticalSpriteStyle('control', 'Win_Text')} />
+                        <strong>{formatMoney(adminOpenSourceResult?.winCents || 0)}</strong>
+                      </div>
+                      <div className="mystical-meter mystical-meter-bet">
+                        <span className="mystical-panel-bg" style={mysticalSpriteStyle('control', 'woodframe')} />
+                        <button
+                          className="mystical-arrow mystical-arrow-left"
+                          type="button"
+                          aria-label="Decrease bet"
+                          style={mysticalSpriteStyle('control', 'arrowLeft_Idle')}
+                          onClick={() => setAdminOpenSourceBet((current) => String(Math.max(1, Number(current || 1) - 1)))}
+                          disabled={adminOpenSourceSpinning}
+                        />
+                        <span className="mystical-label-sprite" style={mysticalSpriteStyle('control', 'Bet_Text')} />
+                        <input
+                          id="adminOpenSourceBet"
+                          aria-label="Bet"
+                          type="number"
+                          min="1"
+                          max="1000"
+                          step="0.01"
+                          value={adminOpenSourceBet}
+                          onChange={(event) => setAdminOpenSourceBet(event.target.value)}
+                          disabled={adminOpenSourceSpinning}
+                        />
+                        <button
+                          className="mystical-arrow mystical-arrow-right"
+                          type="button"
+                          aria-label="Increase bet"
+                          style={mysticalSpriteStyle('control', 'arrowRight_Idle')}
+                          onClick={() => setAdminOpenSourceBet((current) => String(Math.min(1000, Number(current || 1) + 1)))}
+                          disabled={adminOpenSourceSpinning}
+                        />
+                      </div>
+                      <button
+                        className="mystical-info-button"
+                        type="button"
+                        aria-label="Open paytable"
+                        style={mysticalSpriteStyle('control', 'info_Idle')}
+                        onClick={() => setAdminOpenSourcePaytableOpen(true)}
+                      />
+                      <button
+                        className="mystical-spin-button"
+                        type="button"
+                        aria-label="Spin"
+                        disabled={adminOpenSourceSpinning}
+                        onClick={spinAdminOpenSourceSlot}
+                      >
+                        <span style={mysticalSpriteStyle('control', adminOpenSourceSpinning ? 'spin_Disabled' : 'spin_Idle')} />
+                      </button>
+                      {adminOpenSourceResult?.fairnessHash && (
+                        <div className="mystical-audit-strip">
+                          <span>Round #{adminOpenSourceResult.id}</span>
+                          <span>{adminOpenSourceResult.fairnessHash.slice(0, 18)}...</span>
+                        </div>
+                      )}
+                      {adminOpenSourcePaytableOpen && (
+                        <div className="mystical-paytable" role="dialog" aria-modal="true" aria-label="Mystical Forest Adventure paytable">
+                          <div className="mystical-paytable-panel">
+                            <button
+                              className="mystical-paytable-close"
+                              type="button"
+                              aria-label="Close paytable"
+                              onClick={() => setAdminOpenSourcePaytableOpen(false)}
+                            >
+                              x
+                            </button>
+                            <h3>Mystical Forest Adventure</h3>
+                            <div className="mystical-paytable-symbols" style={mysticalSpriteStyle('paytable', 'symbols')} />
+                            <p>Admin-only demo. The visual client is the Mystical Forest Adventure frontend; all reels, wins, balance changes, and audit hashes are settled by the CasUSDT slot service.</p>
+                          </div>
+                        </div>
+                      )}
+                    </section>
+                  </div>
                 </div>
               )}
               </div>

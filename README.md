@@ -52,3 +52,10 @@ The compose file sets development defaults. Change these before using the app ou
 - `MYSQL_ROOT_PASSWORD`
 - `MYSQL_PASSWORD`
 - `JWT_SECRET`
+- `PUBLIC_BASE_URL` - public site URL used for payment callbacks, for example `https://casusdt.com`
+- `CLOAKD_API_URL` - Cloakd API base URL
+- `CLOAKD_PAYMENT_PATH` - Cloakd payment creation path, defaults to `/payment`
+- `CLOAKD_API_KEY` - Cloakd API key
+- `CLOAKD_WEBHOOK_SECRET` - optional webhook signing secret
+
+If `CLOAKD_API_URL` or `CLOAKD_API_KEY` is missing, deposits run in local demo mode and are credited immediately without opening a Cloakd checkout.

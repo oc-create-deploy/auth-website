@@ -42,6 +42,19 @@ export async function initializeDatabase() {
     )
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS withdrawals (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL,
+      amount_cents INT NOT NULL,
+      currency VARCHAR(8) NOT NULL DEFAULT 'USD',
+      wallet_address VARCHAR(255) NOT NULL,
+      status VARCHAR(32) NOT NULL DEFAULT 'pending',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+
   await ensureColumn('users', 'balance_cents', 'balance_cents INT NOT NULL DEFAULT 0');
   await ensureColumn('users', 'is_admin', 'is_admin BOOLEAN NOT NULL DEFAULT FALSE');
   await ensureColumn('users', 'full_name', 'full_name VARCHAR(160)');

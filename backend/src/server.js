@@ -14,19 +14,24 @@ const app = express();
 const port = Number(process.env.PORT || 3000);
 const jwtSecret = process.env.JWT_SECRET || 'local-dev-secret-change-me';
 const defaultCurrency = 'USD';
+const aviatorHouseEdge = 0.01;
+const aviatorMinMultiplier = 1;
+const aviatorMaxMultiplier = 1000000;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const vendorGameRoot = path.resolve(__dirname, '../vendor-games/pragmatic-dragon');
 const vendorGameDesktopRoot = path.join(
   vendorGameRoot,
   'gs2c/common/v2/games-html5/games/vs/vswaysdragden/desktop'
 );
-const vendorGameAssetVersion = 'casusdt-local62';
+const vendorGameAssetVersion = 'casusdt-local50';
 const vendorGameInitPath = path.join(vendorGameRoot, 'gs2c/ge/v5/gameService.html');
 const vendorGameInitResponse = fs.existsSync(vendorGameInitPath)
   ? fs.readFileSync(vendorGameInitPath, 'utf8')
   : '';
 const vendorGameInitParams = new URLSearchParams(vendorGameInitResponse);
-const vendorGameSessions = new Map();
+const cloakdDefaultPublicBaseUrl = process.env.NODE_ENV === 'production' ? 'https://casusdt.com' : 'http://localhost:5173';
+const aviatorRounds = new Map();
+const aviatorTickMs = 100;
 
 app.use(helmet());
 app.use(cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:5173' }));
@@ -216,271 +221,6 @@ function vendorGameSpinParams() {
   };
 }
 
-function formatGameAmount(cents = 0) {
-  return (Number(cents) / 100).toFixed(2);
-}
-
-function parseGameNumber(value, fallback = 0) {
-  const parsed = Number(String(value || '').replace(/,/g, ''));
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function encodeGameResponse(params) {
-  return Object.entries(params)
-    .filter(([, value]) => value !== undefined && value !== null)
-    .map(([key, value]) => `${key}=${String(value)}`)
-    .join('&');
-}
-
-function getVendorGameSession(userId) {
-  const existing = vendorGameSessions.get(userId);
-
-  if (existing) {
-    return existing;
-  }
-
-  const session = {
-    pendingWinCents: 0,
-    freeSpins: null
-  };
-  vendorGameSessions.set(userId, session);
-  return session;
-}
-
-function vendorGameBetConfig(rawCoin, rawBetLevel) {
-  const coin = Number.isFinite(rawCoin) && rawCoin > 0
-    ? rawCoin
-    : parseGameNumber(vendorGameInitParams.get('defc'), 0.10);
-  const betLevel = Number.isFinite(rawBetLevel) ? Math.max(0, Math.min(2, rawBetLevel)) : 0;
-  const linesByLevel = [20, 40, 200];
-  const lines = linesByLevel[betLevel] || linesByLevel[0];
-  const betCents = Math.max(1, Math.round(coin * lines * 100));
-
-  return {
-    coin,
-    coinText: coin.toFixed(2),
-    betLevel,
-    lines,
-    betCents
-  };
-}
-
-function vendorGamePurchaseCostCents(purchaseIndex, betCents) {
-  if (purchaseIndex === 0) {
-    return betCents * 100;
-  }
-
-  if (purchaseIndex === 1) {
-    return betCents * 650;
-  }
-
-  return 0;
-}
-
-function randomVendorVisibleSymbols(length) {
-  const symbols = '123456789a';
-  let result = '';
-
-  for (let index = 0; index < length; index += 1) {
-    const roll = Math.random();
-
-    if (roll < 0.12) {
-      result += 'O';
-    } else if (roll < 0.18) {
-      result += 'W';
-    } else {
-      result += symbols[Math.floor(Math.random() * symbols.length)];
-    }
-  }
-
-  return result;
-}
-
-function randomDragonPotsReels({ forceFeature = false } = {}) {
-  const reelWidth = Number(vendorGameInitParams.get('sw') || 6);
-  const reelHeight = Number(vendorGameInitParams.get('sh') || 7);
-  const symbolCount = Math.max(1, reelWidth * reelHeight);
-  let symbols = randomVendorVisibleSymbols(symbolCount).split('');
-
-  if (forceFeature) {
-    symbols[4] = 'T';
-    symbols[14] = 'V';
-    symbols[24] = 'U';
-  }
-
-  return symbols.join('');
-}
-
-function randomDragonPotsAccumulator(mode = 'base') {
-  if (mode === 'all') {
-    return '6~6;6~6;6~6';
-  }
-
-  if (mode === 'two') {
-    return '6~6;6~6;0~0';
-  }
-
-  return ['0~0;0~0;0~0', '1~1;0~0;0~0', '0~0;1~1;0~0'][Math.floor(Math.random() * 3)];
-}
-
-function randomWinCents(betCents, { feature = false } = {}) {
-  const roll = Math.random();
-
-  if (!feature && roll < 0.62) {
-    return 0;
-  }
-
-  const multipliers = feature
-    ? [0, 0, 1, 2, 4, 7, 10, 18, 30, 45]
-    : [0, 1, 2, 3, 5, 8, 12, 19];
-  const multiplier = multipliers[Math.floor(Math.random() * multipliers.length)];
-
-  return Math.round(betCents * multiplier * (feature ? 0.35 : 1));
-}
-
-function randomWinLine(winCents, bet) {
-  if (winCents <= 0) {
-    return undefined;
-  }
-
-  const amount = formatGameAmount(winCents);
-  const symbol = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'a'][Math.floor(Math.random() * 10)];
-  const ways = Math.max(1, Math.floor(winCents / Math.max(1, bet.betCents)));
-
-  return `${symbol}~${amount}~${ways}~${3 + Math.floor(Math.random() * 4)}~0,7,14,21~l`;
-}
-
-function baseVendorSpinResponse({ action = 'doSpin', balanceCents, bet, index, counter, winCents, nextAction = 's', ntpCents }) {
-  const winLine = randomWinLine(winCents, bet);
-  const symbols = randomDragonPotsReels();
-
-  return {
-    action,
-    tw: formatGameAmount(winCents),
-    balance: formatGameBalance(balanceCents),
-    balance_cash: formatGameBalance(balanceCents),
-    balance_bonus: '0.00',
-    index,
-    counter,
-    na: nextAction,
-    reel_set: String(Math.floor(Math.random() * 11)),
-    accm: 's1cp~s1cd;s2cp~s2cd;s3cp~s3cd',
-    acci: '0;1;2',
-    accv: randomDragonPotsAccumulator(),
-    bl: bet.betLevel,
-    stime: Date.now(),
-    sa: randomVendorSymbols(6),
-    sb: randomVendorSymbols(6),
-    sh: '7',
-    st: 'rect',
-    c: bet.coinText,
-    sw: '6',
-    sver: '6',
-    ntp: formatGameAmount(ntpCents),
-    l: bet.lines,
-    s: symbols,
-    w: formatGameAmount(winCents),
-    wlc_v: winLine
-  };
-}
-
-function vendorGameFeatureStartResponse({ balanceCents, bet, index, counter, purchaseIndex, purchaseCostCents }) {
-  const allModifiers = purchaseIndex === 1;
-  const activeMode = allModifiers ? 'all' : 'two';
-
-  return {
-    tw: '0.00',
-    fsmul: '1',
-    trail: 'fst~12',
-    balance: formatGameBalance(balanceCents),
-    accm: 's1cp~s1cd;s2cp~s2cd;s3cp~s3cd',
-    fsmax: '10',
-    acci: '0;1;2',
-    index,
-    balance_cash: formatGameBalance(balanceCents),
-    purtr: '1',
-    reel_set: '4',
-    balance_bonus: '0.00',
-    na: 's',
-    accv: randomDragonPotsAccumulator(activeMode),
-    fswin: '0.00',
-    puri: purchaseIndex,
-    bl: bet.betLevel,
-    stime: Date.now(),
-    fs: '1',
-    sa: 'OOOOOO',
-    sb: 'OOOOOO',
-    sh: '7',
-    fsres: '0.00',
-    st: 'rect',
-    c: bet.coinText,
-    sw: '6',
-    sver: '6',
-    counter,
-    ntp: formatGameAmount(-purchaseCostCents),
-    l: bet.lines,
-    s: randomDragonPotsReels({ forceFeature: true }),
-    w: '0.00'
-  };
-}
-
-function vendorGameFreeSpinResponse({ balanceCents, bet, index, counter, freeSpins, winCents }) {
-  freeSpins.totalWinCents += winCents;
-
-  const isLastSpin = freeSpins.current >= freeSpins.max;
-  const spinNumber = freeSpins.current;
-  const winLine = randomWinLine(winCents, bet);
-  const response = {
-    tw: formatGameAmount(freeSpins.totalWinCents),
-    fsmul: '1',
-    trail: isLastSpin ? 'fst~12;bpp~0,0,0' : 'fst~12',
-    balance: formatGameBalance(balanceCents),
-    accm: 's1cp~s1cd;s2cp~s2cd;s3cp~s3cd',
-    acci: '0;1;2',
-    index,
-    balance_cash: formatGameBalance(balanceCents),
-    reel_set: String(4 + Math.floor(Math.random() * 7)),
-    balance_bonus: '0.00',
-    na: isLastSpin ? 'c' : 's',
-    accv: randomDragonPotsAccumulator(freeSpins.mode),
-    fswin: isLastSpin ? undefined : formatGameAmount(freeSpins.totalWinCents),
-    fswin_total: isLastSpin ? formatGameAmount(freeSpins.totalWinCents) : undefined,
-    fsmul_total: isLastSpin ? '1' : undefined,
-    fs_total: isLastSpin ? String(freeSpins.max) : undefined,
-    fsend_total: isLastSpin ? '1' : undefined,
-    puri: freeSpins.purchaseIndex,
-    bl: bet.betLevel,
-    stime: Date.now(),
-    fs: isLastSpin ? undefined : String(spinNumber),
-    fsmax: isLastSpin ? undefined : String(freeSpins.max),
-    sa: 'OOOOOO',
-    sb: 'OOOOOO',
-    sh: '7',
-    fsres: isLastSpin ? undefined : formatGameAmount(freeSpins.totalWinCents),
-    st: 'rect',
-    c: bet.coinText,
-    sw: '6',
-    sver: '6',
-    counter,
-    ntp: formatGameAmount(-freeSpins.purchaseCostCents),
-    l: bet.lines,
-    s: randomDragonPotsReels(),
-    w: formatGameAmount(winCents),
-    wlc_v: winLine,
-    wmt: 'pr',
-    wmv: String([2, 3, 4, 5, 7, 10][Math.floor(Math.random() * 6)]),
-    gwm: String([2, 3, 4, 5, 7, 10][Math.floor(Math.random() * 6)])
-  };
-
-  freeSpins.current += 1;
-
-  if (isLastSpin) {
-    return response;
-  }
-
-  return response;
-}
-
 function parseDepositAmount(value) {
   const amount = Number(value);
 
@@ -491,10 +231,84 @@ function parseDepositAmount(value) {
   return Math.round(amount * 100);
 }
 
+function parseWalletAddress(value) {
+  const walletAddress = String(value || '').trim();
+
+  if (walletAddress.length < 8 || walletAddress.length > 255) {
+    return null;
+  }
+
+  return walletAddress;
+}
+
+function parseGameBet(value) {
+  const amount = Number(value);
+
+  if (!Number.isFinite(amount) || amount < 1 || amount > 10000) {
+    return null;
+  }
+
+  return Math.round(amount * 100);
+}
+
+function aviatorCrashMultiplier(serverSeed, clientSeed) {
+  const nonce = 1;
+  const hash = crypto
+    .createHmac('sha256', serverSeed)
+    .update(`${clientSeed}:${nonce}`)
+    .digest('hex');
+  const value = BigInt(`0x${hash.slice(0, 16)}`);
+  const ratio = Number(value) / 18446744073709551616;
+
+  if (ratio < aviatorHouseEdge) {
+    return aviatorMinMultiplier;
+  }
+
+  const raw = (100 - aviatorHouseEdge * 100) / (100 - ratio * 100);
+  const multiplier = Math.floor(raw * 100) / 100;
+
+  return Math.max(aviatorMinMultiplier, Math.min(aviatorMaxMultiplier, multiplier));
+}
+
+function aviatorCurrentMultiplier(round, now = Date.now()) {
+  const elapsedSeconds = Math.max(0, (now - round.startedAt) / 1000);
+  const multiplier = Math.floor((1 + elapsedSeconds / 1.5 + elapsedSeconds * elapsedSeconds * 0.005) * 100) / 100;
+
+  return Math.max(aviatorMinMultiplier, Math.min(multiplier, round.crashMultiplier));
+}
+
+function publicAviatorRound(round) {
+  const now = Date.now();
+  const multiplier = aviatorCurrentMultiplier(round, now);
+  const crashed = multiplier >= round.crashMultiplier;
+
+  return {
+    id: round.id,
+    betCents: round.betCents,
+    multiplier,
+    crashed,
+    serverSeedHash: round.serverSeedHash,
+    startedAt: round.startedAt
+  };
+}
+
+setInterval(() => {
+  const now = Date.now();
+
+  for (const [roundId, round] of aviatorRounds.entries()) {
+    const expired = now - round.startedAt > 5 * 60 * 1000;
+    const crashed = aviatorCurrentMultiplier(round, now) >= round.crashMultiplier;
+
+    if (expired || crashed) {
+      aviatorRounds.delete(roundId);
+    }
+  }
+}, 30 * 1000).unref?.();
+
 async function createCloakdSession({ amountCents, currency, email, userId }) {
   const baseUrl = process.env.CLOAKD_API_URL;
   const apiKey = process.env.CLOAKD_API_KEY;
-  const publicBaseUrl = (process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || '').replace(/\/$/, '');
+  const publicBaseUrl = (process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || cloakdDefaultPublicBaseUrl).replace(/\/$/, '');
 
   if (!baseUrl || !apiKey) {
     return {
@@ -506,9 +320,11 @@ async function createCloakdSession({ amountCents, currency, email, userId }) {
   }
 
   const orderId = `deposit-${userId}-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
-  const response = await fetch(`${baseUrl.replace(/\/$/, '')}/payment`, {
+  const endpoint = process.env.CLOAKD_PAYMENT_PATH || '/payment';
+  const response = await fetch(`${baseUrl.replace(/\/$/, '')}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`, {
     method: 'POST',
     headers: {
+      'Authorization': `Bearer ${apiKey}`,
       'X-API-Key': apiKey,
       'Idempotency-Key': orderId,
       'Content-Type': 'application/json'
@@ -536,10 +352,54 @@ async function createCloakdSession({ amountCents, currency, email, userId }) {
     throw new Error(data.message || 'Cloakd deposit session could not be created.');
   }
 
+  const responseData = data.data || data.payment || data.paymentLink || data.checkout || data;
+  const reference = findFirstValue(responseData, [
+    'id',
+    'reference',
+    'paymentId',
+    'payment_id',
+    'paymentLinkId',
+    'payment_link_id',
+    'order_id',
+    'orderId',
+    'checkoutId',
+    'checkout_id'
+  ]) || findFirstValue(data, ['id', 'reference', 'paymentId', 'payment_id', 'order_id', 'orderId']);
+  const checkoutUrl = findFirstValue(responseData, [
+    'checkout_url',
+    'checkoutUrl',
+    'checkoutURL',
+    'paymentUrl',
+    'payment_url',
+    'paymentURL',
+    'hosted_url',
+    'hostedUrl',
+    'invoice_url',
+    'invoiceUrl',
+    'url'
+  ]) || findFirstValue(data, [
+    'checkout_url',
+    'checkoutUrl',
+    'checkoutURL',
+    'paymentUrl',
+    'payment_url',
+    'paymentURL',
+    'hosted_url',
+    'hostedUrl',
+    'invoice_url',
+    'invoiceUrl',
+    'url'
+  ]);
+
+  if (!checkoutUrl) {
+    console.error('Cloakd response did not include a checkout URL', data);
+    throw new Error('Cloakd did not return a checkout URL.');
+  }
+
   return {
     provider: 'cloakd',
-    reference: String(data.id || data.reference || data.paymentId || data.payment_id || data.order_id || orderId),
-    checkoutUrl: data.checkout_url || data.checkoutUrl || data.paymentUrl || data.url || null,
+    reference: String(reference || orderId),
+    checkoutUrl: String(checkoutUrl),
     status: 'pending'
   };
 }
@@ -557,6 +417,24 @@ function hmacHex(secret, payload) {
 
 function hmacBase64(secret, payload) {
   return crypto.createHmac('sha256', secret).update(payload).digest('base64');
+}
+
+function webhookSecretCandidates(secret) {
+  const candidates = [secret];
+
+  if (secret.startsWith('whsec_')) {
+    const value = secret.slice(6);
+
+    try {
+      candidates.push(Buffer.from(value, 'base64'));
+    } catch {}
+
+    if (/^[a-f0-9]+$/i.test(value) && value.length % 2 === 0) {
+      candidates.push(Buffer.from(value, 'hex'));
+    }
+  }
+
+  return candidates;
 }
 
 function parseStripeSignature(signatureHeader = '') {
@@ -586,30 +464,31 @@ function verifyCloakdWebhook(req) {
 
   if (stripeSignature) {
     const parsed = parseStripeSignature(stripeSignature);
-    const expected = hmacHex(secret, `${parsed.t}.${body}`);
-    return Boolean(parsed.t && parsed.v1 && timingSafeEqualString(parsed.v1, expected));
+    return Boolean(
+      parsed.t
+        && parsed.v1
+        && webhookSecretCandidates(secret).some((candidate) => timingSafeEqualString(parsed.v1, hmacHex(candidate, `${parsed.t}.${body}`)))
+    );
   }
 
   if (cloakdSignature) {
     const payload = cloakdTimestamp ? `${cloakdTimestamp}.${body}` : body;
-    const expected = hmacHex(secret, payload);
-    return timingSafeEqualString(cloakdSignature, expected);
+    return webhookSecretCandidates(secret).some((candidate) => timingSafeEqualString(cloakdSignature, hmacHex(candidate, payload)));
   }
 
   if (webhookId && webhookTimestamp && webhookSignature) {
     const signedContent = `${webhookId}.${webhookTimestamp}.${body}`;
-    const candidates = [secret];
-
-    if (secret.startsWith('whsec_')) {
-      candidates.push(Buffer.from(secret.slice(6), 'base64'));
-    }
+    const candidates = webhookSecretCandidates(secret);
 
     return webhookSignature
       .split(' ')
       .flatMap((signature) => signature.split(','))
       .some((signature) => {
         const value = signature.replace(/^v\d+,/, '').replace(/^v\d+=/, '');
-        return candidates.some((candidate) => timingSafeEqualString(value, hmacBase64(candidate, signedContent)));
+        return candidates.some((candidate) => (
+          timingSafeEqualString(value, hmacBase64(candidate, signedContent))
+          || timingSafeEqualString(value, hmacHex(candidate, signedContent))
+        ));
       });
   }
 
@@ -926,6 +805,160 @@ app.post('/api/admin/vendor-game/session', requireUser, requireAdmin, (req, res)
   });
 });
 
+app.post('/api/aviator/rounds', requireUser, requireAdmin, async (req, res) => {
+  const betCents = parseGameBet(req.body.bet);
+  const clientSeed = String(req.body.clientSeed || `user-${req.user.id}`).slice(0, 120);
+
+  if (!betCents) {
+    return res.status(400).json({ message: 'Enter an Aviator bet from $1 to $10,000.' });
+  }
+
+  const existingRound = [...aviatorRounds.values()].find((round) => round.userId === req.user.id);
+
+  if (existingRound && aviatorCurrentMultiplier(existingRound) < existingRound.crashMultiplier) {
+    return res.status(409).json({ message: 'Cash out or wait for the current Aviator round to finish.' });
+  }
+
+  if (existingRound) {
+    aviatorRounds.delete(existingRound.id);
+  }
+
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+    const [users] = await connection.execute(
+      'SELECT id, email, balance_cents, is_admin, full_name, status, created_at FROM users WHERE id = ? LIMIT 1 FOR UPDATE',
+      [req.user.id]
+    );
+    const user = users[0];
+
+    if (!user || user.status !== 'active') {
+      await connection.rollback();
+      return res.status(403).json({ message: 'Account is not active.' });
+    }
+
+    if (Number(user.balance_cents) < betCents) {
+      await connection.rollback();
+      return res.status(400).json({ message: 'Insufficient balance for this Aviator bet.' });
+    }
+
+    await connection.execute(
+      'UPDATE users SET balance_cents = balance_cents - ? WHERE id = ?',
+      [betCents, req.user.id]
+    );
+
+    const [updatedUsers] = await connection.execute(
+      'SELECT id, email, balance_cents, is_admin, full_name, status, created_at FROM users WHERE id = ? LIMIT 1',
+      [req.user.id]
+    );
+    await connection.commit();
+
+    const serverSeed = crypto.randomBytes(32).toString('hex');
+    const round = {
+      id: crypto.randomUUID(),
+      userId: req.user.id,
+      betCents,
+      clientSeed,
+      serverSeed,
+      serverSeedHash: crypto.createHash('sha256').update(serverSeed).digest('hex'),
+      crashMultiplier: aviatorCrashMultiplier(serverSeed, clientSeed),
+      startedAt: Date.now()
+    };
+
+    aviatorRounds.set(round.id, round);
+
+    res.status(201).json({
+      round: publicAviatorRound(round),
+      user: publicUser(updatedUsers[0])
+    });
+  } catch (error) {
+    await connection.rollback();
+    console.error(error);
+    res.status(500).json({ message: 'Could not start Aviator round.' });
+  } finally {
+    connection.release();
+  }
+});
+
+app.get('/api/aviator/rounds/:id', requireUser, requireAdmin, (req, res) => {
+  const round = aviatorRounds.get(req.params.id);
+
+  if (!round || round.userId !== req.user.id) {
+    return res.status(404).json({ message: 'Aviator round not found.' });
+  }
+
+  const publicRound = publicAviatorRound(round);
+
+  if (publicRound.crashed) {
+    aviatorRounds.delete(round.id);
+  }
+
+  res.json({ round: publicRound });
+});
+
+app.post('/api/aviator/rounds/:id/cashout', requireUser, requireAdmin, async (req, res) => {
+  const round = aviatorRounds.get(req.params.id);
+
+  if (!round || round.userId !== req.user.id) {
+    return res.status(404).json({ message: 'Aviator round not found.' });
+  }
+
+  const multiplier = aviatorCurrentMultiplier(round);
+
+  if (multiplier >= round.crashMultiplier) {
+    aviatorRounds.delete(round.id);
+    return res.status(409).json({
+      message: `Crashed at ${round.crashMultiplier.toFixed(2)}x.`,
+      result: {
+        crashed: true,
+        multiplier: round.crashMultiplier,
+        betCents: round.betCents,
+        winCents: 0,
+        netCents: -round.betCents,
+        serverSeed: round.serverSeed,
+        serverSeedHash: round.serverSeedHash
+      }
+    });
+  }
+
+  aviatorRounds.delete(round.id);
+  const winCents = Math.floor(round.betCents * multiplier);
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+    await connection.execute(
+      'UPDATE users SET balance_cents = balance_cents + ? WHERE id = ?',
+      [winCents, req.user.id]
+    );
+    const [users] = await connection.execute(
+      'SELECT id, email, balance_cents, is_admin, full_name, status, created_at FROM users WHERE id = ? LIMIT 1',
+      [req.user.id]
+    );
+    await connection.commit();
+
+    res.json({
+      result: {
+        crashed: false,
+        multiplier,
+        betCents: round.betCents,
+        winCents,
+        netCents: winCents - round.betCents,
+        serverSeed: round.serverSeed,
+        serverSeedHash: round.serverSeedHash
+      },
+      user: publicUser(users[0])
+    });
+  } catch (error) {
+    await connection.rollback();
+    console.error(error);
+    res.status(500).json({ message: 'Could not cash out Aviator round.' });
+  } finally {
+    connection.release();
+  }
+});
+
 app.use('/api/admin/vendor-game', requireVendorGameAccess, (req, res, next) => {
   res.removeHeader('Content-Security-Policy');
   res.setHeader('Content-Security-Policy', [
@@ -950,181 +983,46 @@ app.all('/api/admin/vendor-game/gs2c/ge/v5/gameService', async (req, res) => {
   }
 
   const action = String(req.body.action || req.query.action || 'doInit');
-  const rawCoin = Number(req.body.c || req.query.c || vendorGameInitParams.get('defc') || '0.10');
-  const rawBetLevel = Number(req.body.bl || req.query.bl || '0');
-  const purchaseIndexValue = req.body.pur ?? req.query.pur;
-  const purchaseIndex = purchaseIndexValue === undefined ? null : Number(purchaseIndexValue);
-  const requestIndex = Number(req.body.index || req.query.index || 1);
-  const requestCounter = Number(req.body.counter || req.query.counter || 1);
-  const bet = vendorGameBetConfig(rawCoin, rawBetLevel);
-  const session = getVendorGameSession(req.vendorGameUser.id);
+  const coin = Number(req.body.c || req.query.c || vendorGameInitParams.get('c') || '0.10');
+  const lines = Number(req.body.l || req.query.l || vendorGameInitParams.get('l') || '20');
+  const betCents = Math.max(0, Math.round(coin * lines * 100));
 
-  const readBalance = async () => {
+  try {
+    if (action === 'doSpin' && betCents > 0) {
+      await pool.execute(
+        'UPDATE users SET balance_cents = GREATEST(balance_cents - ?, 0) WHERE id = ?',
+        [betCents, req.vendorGameUser.id]
+      );
+    }
+
     const [rows] = await pool.execute(
       'SELECT balance_cents FROM users WHERE id = ? LIMIT 1',
       [req.vendorGameUser.id]
     );
-
-    return Number(rows[0]?.balance_cents || 0);
-  };
-
-  const sendNoMoney = (balanceCents) => {
-    res.type('text/plain').send(encodeGameResponse({
-      balance: formatGameBalance(balanceCents),
-      balance_cash: formatGameBalance(balanceCents),
-      balance_bonus: '0.00',
-      c: bet.coinText,
-      l: bet.lines,
-      bl: bet.betLevel,
-      na: 's',
-      nomoney: '1',
-      stime: Date.now(),
-      index: requestIndex,
-      counter: requestCounter
-    }));
-  };
-
-  try {
-    if (action === 'doInit') {
-      session.pendingWinCents = 0;
-      session.freeSpins = null;
-
-      const balanceCents = await readBalance();
-      const balance = formatGameBalance(balanceCents);
-
-      return res.type('text/plain').send(vendorGameResponse({
-        balance,
-        balance_cash: balance,
-        balance_bonus: '0.00',
-        stime: Date.now(),
-        index: requestIndex,
-        counter: requestCounter,
-        na: 's'
-      }));
-    }
-
-    if (action === 'doCollect') {
-      if (session.pendingWinCents > 0) {
-        await pool.execute(
-          'UPDATE users SET balance_cents = balance_cents + ? WHERE id = ?',
-          [session.pendingWinCents, req.vendorGameUser.id]
-        );
-        session.pendingWinCents = 0;
-      }
-
-      const balanceCents = await readBalance();
-
-      return res.type('text/plain').send(encodeGameResponse({
-        balance: formatGameBalance(balanceCents),
-        balance_cash: formatGameBalance(balanceCents),
-        balance_bonus: '0.00',
-        index: requestIndex,
-        counter: requestCounter,
-        na: 's',
-        stime: Date.now(),
-        sver: '6'
-      }));
-    }
-
-    if (action === 'doSpin') {
-      if (session.freeSpins) {
-        const balanceCents = await readBalance();
-        const winCents = randomWinCents(bet.betCents, { feature: true });
-        const response = vendorGameFreeSpinResponse({
-          balanceCents,
-          bet,
-          index: requestIndex,
-          counter: requestCounter,
-          freeSpins: session.freeSpins,
-          winCents
-        });
-
-        if (response.na === 'c') {
-          session.pendingWinCents = session.freeSpins.totalWinCents;
-          session.freeSpins = null;
-        }
-
-        return res.type('text/plain').send(encodeGameResponse(response));
-      }
-
-      if (purchaseIndex === 0 || purchaseIndex === 1) {
-        const purchaseCostCents = vendorGamePurchaseCostCents(purchaseIndex, bet.betCents);
-        const balanceCents = await readBalance();
-
-        if (balanceCents < purchaseCostCents) {
-          return sendNoMoney(balanceCents);
-        }
-
-        await pool.execute(
-          'UPDATE users SET balance_cents = balance_cents - ? WHERE id = ?',
-          [purchaseCostCents, req.vendorGameUser.id]
-        );
-        const updatedBalanceCents = await readBalance();
-        session.pendingWinCents = 0;
-        session.freeSpins = {
-          current: 2,
-          max: 10,
-          totalWinCents: 0,
-          purchaseIndex,
-          purchaseCostCents,
-          mode: purchaseIndex === 1 ? 'all' : 'two'
-        };
-
-        return res.type('text/plain').send(encodeGameResponse(vendorGameFeatureStartResponse({
-          balanceCents: updatedBalanceCents,
-          bet,
-          index: requestIndex,
-          counter: requestCounter,
-          purchaseIndex,
-          purchaseCostCents
-        })));
-      }
-
-      const balanceCents = await readBalance();
-
-      if (balanceCents < bet.betCents) {
-        return sendNoMoney(balanceCents);
-      }
-
-      await pool.execute(
-        'UPDATE users SET balance_cents = balance_cents - ? WHERE id = ?',
-        [bet.betCents, req.vendorGameUser.id]
-      );
-      const updatedBalanceCents = await readBalance();
-      const winCents = randomWinCents(bet.betCents);
-      session.pendingWinCents = winCents;
-
-      return res.type('text/plain').send(encodeGameResponse(baseVendorSpinResponse({
-        balanceCents: updatedBalanceCents,
-        bet,
-        index: requestIndex,
-        counter: requestCounter,
-        winCents,
-        nextAction: winCents > 0 ? 'c' : 's',
-        ntpCents: winCents - bet.betCents
-      })));
-    }
-
-    const balanceCents = await readBalance();
-
-    res.type('text/plain').send(encodeGameResponse({
+    const balance = formatGameBalance(rows[0]?.balance_cents || 0);
+    const now = Date.now();
+    const base = {
       action,
-      balance: formatGameBalance(balanceCents),
-      balance_cash: formatGameBalance(balanceCents),
+      balance,
+      balance_cash: balance,
       balance_bonus: '0.00',
-      c: bet.coinText,
-      l: bet.lines,
-      bl: bet.betLevel,
-      stime: Date.now(),
-      index: requestIndex,
-      counter: requestCounter,
+      c: coin.toFixed(2),
+      l: Number.isFinite(lines) ? lines : 20,
+      stime: now,
+      index: Math.floor(now / 1000),
+      counter: Math.floor(now / 500),
       na: 's',
       tw: '0.00',
       w: '0.00',
+      rs_p: '0',
       s: vendorGameInitParams.get('s') || vendorGameInitParams.get('def_s') || '',
       sa: vendorGameInitParams.get('def_sa') || vendorGameInitParams.get('sa') || '',
       sb: vendorGameInitParams.get('def_sb') || vendorGameInitParams.get('sb') || ''
-    }));
+    };
+
+    res.type('text/plain').send(vendorGameResponse(action === 'doSpin'
+      ? { ...base, ...vendorGameSpinParams() }
+      : base));
   } catch (error) {
     console.error(error);
     res.status(500).send('Could not simulate vendor game response.');
@@ -1310,6 +1208,63 @@ app.post('/api/deposits', requireUser, async (req, res) => {
     console.error(error);
     res.status(502).json({ message: error.message || 'Deposit provider is unavailable.' });
   }
+});
+
+app.get('/api/withdrawals', requireUser, async (req, res) => {
+  const [rows] = await pool.execute(
+    `
+      SELECT id, amount_cents AS amountCents, currency, wallet_address AS walletAddress,
+             status, created_at AS createdAt
+      FROM withdrawals
+      WHERE user_id = ?
+      ORDER BY id DESC
+      LIMIT 10
+    `,
+    [req.user.id]
+  );
+
+  res.json({ withdrawals: rows });
+});
+
+app.post('/api/withdrawals', requireUser, async (req, res) => {
+  const amountCents = parseDepositAmount(req.body.amount);
+  const currency = String(req.body.currency || defaultCurrency).toUpperCase();
+  const walletAddress = parseWalletAddress(req.body.walletAddress);
+
+  if (!amountCents) {
+    return res.status(400).json({ message: 'Enter a withdrawal amount from 1 to 10,000.' });
+  }
+
+  if (!walletAddress) {
+    return res.status(400).json({ message: 'Enter a valid wallet address.' });
+  }
+
+  const [[account]] = await pool.execute(
+    'SELECT balance_cents FROM users WHERE id = ? LIMIT 1',
+    [req.user.id]
+  );
+
+  if (!account || Number(account.balance_cents) < amountCents) {
+    return res.status(400).json({ message: 'Withdrawal amount exceeds available balance.' });
+  }
+
+  const [result] = await pool.execute(
+    `
+      INSERT INTO withdrawals (user_id, amount_cents, currency, wallet_address, status)
+      VALUES (?, ?, ?, ?, ?)
+    `,
+    [req.user.id, amountCents, currency, walletAddress, 'pending']
+  );
+
+  res.status(201).json({
+    withdrawal: {
+      id: result.insertId,
+      amountCents,
+      currency,
+      walletAddress,
+      status: 'pending'
+    }
+  });
 });
 
 app.post('/api/webhooks/cloakd', async (req, res) => {
