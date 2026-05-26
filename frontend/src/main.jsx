@@ -347,6 +347,7 @@ function App() {
   const [adminSaving, setAdminSaving] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const [showCrashInfo, setShowCrashInfo] = useState(true);
   const emailInputRef = useRef(null);
 
   const token = localStorage.getItem('authToken');
@@ -384,12 +385,17 @@ function App() {
   ];
   const visibleGames = games.filter((game) => game.enabled !== false);
   const isSelectedSlotDisabled = slotSession?.enabled === false;
-  const crashRocketProgress = Math.min((aviatorMultiplier - 1) / 9, 1);
+  const gambaCrashMultiplier = aviatorRound ? aviatorMultiplier : aviatorResult ? aviatorResult.multiplier : 0;
+  const crashRocketProgress = Math.min(gambaCrashMultiplier, 1);
   const crashRocketStyle = {
-    left: `${8 + crashRocketProgress * 72}%`,
-    bottom: `${14 + Math.pow(crashRocketProgress, 1.8) * 62}%`,
-    transform: `rotate(${70 - crashRocketProgress * 86}deg)`
+    left: `${crashRocketProgress * 80}%`,
+    bottom: `${Math.pow(crashRocketProgress, 5) * 70}%`,
+    transform: `rotate(${(1 - Math.pow(crashRocketProgress, 2.3)) * 90}deg)`
   };
+  const gambaCrashTone = aviatorResult?.crashed ? 'is-crashed' : aviatorResult ? 'is-win' : '';
+  const crashTargetSliderValue = aviatorTarget <= 10
+    ? Math.round(((aviatorTarget - 1) / 9) * 50)
+    : Math.round(50 + ((aviatorTarget - 10) / 90) * 50);
 
   const passwordHint = useMemo(() => {
     if (mode === 'login') {
@@ -1494,149 +1500,150 @@ function App() {
               )}
 
               {user.isAdmin && activeView === 'aviator' && (
-                <div className="hi-aviator-shell">
-                  <div className="hi-aviator-topbar">
-                    <div className="hi-aviator-brand">
-                      <span className="hi-aviator-mark">C</span>
-                      <div>
-                        <h2>Crash</h2>
-                        <p>Rocket multiplier game connected to your CasUSDT balance.</p>
+                <div className="gamba-crash-view">
+                  <div className="gamba-crash-game">
+                    <div className={'gamba-crash-screen ' + (aviatorRound ? 'is-flying' : aviatorResult?.crashed ? 'is-crashed' : '')}>
+                      {showCrashInfo && (
+                        <div className="gamba-crash-info-modal" role="dialog" aria-modal="true" aria-label="Crash game information">
+                          <button type="button" className="gamba-crash-modal-close" aria-label="Close" onClick={() => setShowCrashInfo(false)}>
+                            ×
+                          </button>
+                          <h1>
+                            <img src="/assets/gamba-games/crash.png" alt="Crash" />
+                          </h1>
+                          <p>
+                            Predict a multiplier target and watch a rocket attempt to reach it. If the rocket crashes before the target, the player loses; if it reaches or exceeds the target, the player wins.
+                          </p>
+                          <button type="button" className="gamba-crash-info-play" onClick={() => setShowCrashInfo(false)}>
+                            Play
+                          </button>
+                        </div>
+                      )}
+                      <div className="gamba-crash-screen-inner">
+                        <div className="gamba-crash-stars-layer gamba-crash-stars-layer-1" style={{ opacity: gambaCrashMultiplier > 3 ? 0 : 1 }} />
+                        <div className="gamba-crash-lines-layer gamba-crash-lines-layer-1" style={{ opacity: gambaCrashMultiplier > 3 ? 1 : 0 }} />
+                        <div className="gamba-crash-stars-layer gamba-crash-stars-layer-2" style={{ opacity: gambaCrashMultiplier > 2 ? 0 : 1 }} />
+                        <div className="gamba-crash-lines-layer gamba-crash-lines-layer-2" style={{ opacity: gambaCrashMultiplier > 2 ? 1 : 0 }} />
+                        <div className="gamba-crash-stars-layer gamba-crash-stars-layer-3" style={{ opacity: gambaCrashMultiplier > 1 ? 0 : 1 }} />
+                        <div className="gamba-crash-lines-layer gamba-crash-lines-layer-3" style={{ opacity: gambaCrashMultiplier > 1 ? 1 : 0 }} />
+                        <div className={'gamba-crash-multiplier ' + gambaCrashTone}>
+                          {gambaCrashMultiplier.toFixed(2)}x
+                        </div>
+                        <img className="gamba-crash-rocket" src="/assets/crash-rocket.gif" alt="" style={crashRocketStyle} />
+                      </div>
+                      <div className="gamba-crash-meta-controls" aria-label="Game tools">
+                        <button type="button" aria-label="Information" onClick={() => setShowCrashInfo(true)}>i</button>
+                        <button type="button" aria-label="Fairness">F</button>
+                        <button type="button" aria-label="Sound">S</button>
                       </div>
                     </div>
-                    <div className="hi-aviator-balance">
-                      <span>Balance</span>
-                      <strong>{formatMoney(user.balanceCents)}</strong>
+
+                    <div className="gamba-crash-loading" aria-hidden="true" />
+
+                    <div className="gamba-crash-controls">
+                      <div className="gamba-crash-wager">
+                        <button
+                          type="button"
+                          disabled={Boolean(aviatorRound)}
+                          onClick={() => setAviatorBet((current) => String(Math.max(1, Math.floor(Number(current || 0) - 1))))}
+                        >
+                          -
+                        </button>
+                        <label>
+                          <span>Wager</span>
+                          <input
+                            id="aviatorBet"
+                            aria-label="Crash wager"
+                            type="number"
+                            min="1"
+                            max="10000"
+                            step="1"
+                            value={aviatorBet}
+                            disabled={Boolean(aviatorRound)}
+                            onChange={(event) => setAviatorBet(event.target.value)}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          disabled={Boolean(aviatorRound)}
+                          onClick={() => setAviatorBet((current) => String(Math.max(1, Math.floor(Number(current || 0) + 1))))}
+                        >
+                          +
+                        </button>
+                        <button
+                          type="button"
+                          disabled={Boolean(aviatorRound)}
+                          onClick={() => setAviatorBet((current) => String(Math.max(1, Math.floor(Number(current || 0) * 0.5))))}
+                        >
+                          x.5
+                        </button>
+                        <button
+                          type="button"
+                          disabled={Boolean(aviatorRound)}
+                          onClick={() => setAviatorBet((current) => String(Math.max(1, Math.floor(Number(current || 0) * 2))))}
+                        >
+                          2x
+                        </button>
+                      </div>
+
+                      <div className="gamba-crash-slider">
+                        <span>{aviatorTarget.toFixed(2)}x</span>
+                        <input
+                          aria-label="Crash target multiplier"
+                          type="range"
+                          min="1"
+                          max="100"
+                          step="1"
+                          value={crashTargetSliderValue}
+                          disabled={Boolean(aviatorRound)}
+                          onChange={(event) => {
+                            const index = Number(event.target.value);
+                            const nextTarget = index <= 50
+                              ? Math.round((1 + (9 * (index / 50))) * 4) / 4
+                              : Math.round(10 + (90 * ((index - 50) / 50)));
+                            setAviatorTarget(nextTarget);
+                          }}
+                        />
+                      </div>
+
+                      {aviatorRound ? (
+                        <button className="gamba-crash-play" type="button" disabled={aviatorBusy} onClick={cashOutAviatorRound}>
+                          Cash out {formatMoney(Math.floor(aviatorRound.betCents * aviatorMultiplier))}
+                        </button>
+                      ) : (
+                        <button className="gamba-crash-play" type="button" disabled={aviatorBusy} onClick={startAviatorRound}>
+                          {aviatorBusy ? 'Launching...' : 'Play'}
+                        </button>
+                      )}
                     </div>
-                  </div>
-
-                  <div className="hi-aviator-history" aria-label="Recent Crash multipliers">
-                    {aviatorHistory.map((item, index) => (
-                      <span
-                        key={`${item}-${index}`}
-                        className={Number(item.replace('x', '')) >= 2 ? 'is-hot' : ''}
-                      >
-                        {item}
-                      </span>
-                    ))}
-                  </div>
-
-                  <div className={'hi-aviator-stage ' + (aviatorRound ? 'is-flying' : aviatorResult?.crashed ? 'is-crashed' : '')}>
-                    <div className="hi-crash-stars hi-crash-stars-one" aria-hidden="true" />
-                    <div className="hi-crash-stars hi-crash-stars-two" aria-hidden="true" />
-                    <div className="hi-crash-stars hi-crash-stars-three" aria-hidden="true" />
-                    <div className="hi-crash-speed-lines" aria-hidden="true" />
-                    <img className="hi-crash-rocket" src="/assets/crash-rocket.gif" alt="" style={crashRocketStyle} />
-                    <div className={'hi-aviator-multiplier ' + (aviatorResult?.crashed ? 'is-crashed' : aviatorResult ? 'is-win' : '')} aria-live="polite">
-                      {aviatorMultiplier.toFixed(2)}x
-                    </div>
-                    <div className="hi-aviator-state">
-                      {aviatorRound
-                        ? `Target ${aviatorTarget.toFixed(2)}x. Cash out manually or let auto cashout trigger.`
-                        : aviatorResult
-                          ? aviatorResult.crashed
-                            ? 'Rocket crashed before target.'
-                            : `You took ${formatMoney(aviatorResult.winCents)}.`
-                          : 'Choose a target multiplier and launch the next round.'}
-                    </div>
-                  </div>
-
-                  <div className="hi-aviator-betboards">
-                    {[0, 1].map((panelIndex) => {
-                      const isLivePanel = panelIndex === 0;
-
-                      return (
-                        <div className="hi-aviator-betboard" key={panelIndex}>
-                          <div className="hi-aviator-tabs">
-                            <button type="button" className="active">Bet</button>
-                            <button type="button" disabled>Auto</button>
-                          </div>
-                          <div className="hi-aviator-stake">
-                            <button
-                              type="button"
-                              disabled={!isLivePanel || Boolean(aviatorRound)}
-                              onClick={() => setAviatorBet((current) => String(Math.max(1, Number(current || 0) - 1)))}
-                            >
-                              -
-                            </button>
-                            <input
-                              id={isLivePanel ? 'aviatorBet' : undefined}
-                              aria-label={isLivePanel ? 'Crash bet amount' : 'Inactive bet panel amount'}
-                              type="number"
-                              min="1"
-                              max="10000"
-                              step="1"
-                              value={isLivePanel ? aviatorBet : '10'}
-                              disabled={!isLivePanel || Boolean(aviatorRound)}
-                              onChange={(event) => setAviatorBet(event.target.value)}
-                            />
-                            <button
-                              type="button"
-                              disabled={!isLivePanel || Boolean(aviatorRound)}
-                              onClick={() => setAviatorBet((current) => String(Math.max(1, Number(current || 0) + 1)))}
-                            >
-                              +
-                            </button>
-                          </div>
-                          <div className="hi-aviator-chips">
-                            {[10, 20, 50, 100].map((chip) => (
-                              <button
-                                key={chip}
-                                type="button"
-                                disabled={!isLivePanel || Boolean(aviatorRound)}
-                                onClick={() => setAviatorBet(String(chip))}
-                              >
-                                {chip}
-                              </button>
-                            ))}
-                          </div>
-                          {isLivePanel && (
-                            <div className="hi-crash-target">
-                              <div>
-                                <span>Target multiplier</span>
-                                <strong>{aviatorTarget.toFixed(2)}x</strong>
-                              </div>
-                              <input
-                                aria-label="Crash target multiplier"
-                                type="range"
-                                min="1.1"
-                                max="10"
-                                step="0.1"
-                                value={aviatorTarget}
-                                disabled={Boolean(aviatorRound)}
-                                onChange={(event) => setAviatorTarget(Number(event.target.value))}
-                              />
-                            </div>
-                          )}
-                          {isLivePanel ? (
-                            aviatorRound ? (
-                              <button className="hi-aviator-cashout" type="button" disabled={aviatorBusy} onClick={cashOutAviatorRound}>
-                                <span>Cash out</span>
-                                <strong>{formatMoney(Math.floor(aviatorRound.betCents * aviatorMultiplier))}</strong>
-                              </button>
-                            ) : (
-                              <button className="hi-aviator-bet" type="button" disabled={aviatorBusy} onClick={startAviatorRound}>
-                                <span>{aviatorBusy ? 'Launching...' : 'Launch'}</span>
-                                <strong>{formatMoney(Math.round(Number(aviatorBet || 0) * 100))}</strong>
-                              </button>
-                            )
-                          ) : (
-                            <button className="hi-aviator-bet is-disabled" type="button" disabled>
-                              <span>Bet</span>
-                              <strong>{formatMoney(1000)}</strong>
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
                   </div>
 
                   {aviatorResult && (
-                    <div className="hi-aviator-result">
+                    <div className="gamba-crash-result">
                       <span>{aviatorResult.crashed ? 'Crashed' : 'Cashed out'}</span>
                       <strong>{aviatorResult.multiplier.toFixed(2)}x</strong>
                       <small>Net {formatMoney(aviatorResult.netCents)}</small>
                     </div>
                   )}
+
+                  <div className="gamba-crash-carousel" aria-label="More Gamba games">
+                    {[
+                      ['dice', 'Dice', '#ff6490'],
+                      ['slots', 'Slots', '#5465ff'],
+                      ['flip', 'Flip', '#ffe694'],
+                      ['hilo', 'HiLo', '#ff4f4f'],
+                      ['mines', 'Mines', '#8376ff'],
+                      ['plinko', 'Plinko', '#7272ff'],
+                      ['roulette', 'Roulette', '#1de87e'],
+                      ['blackjack', 'BlackJack', '#084700']
+                    ].map(([id, name, background]) => (
+                      <div className="gamba-crash-card" key={id} style={{ background }}>
+                        <div className="gamba-crash-card-pattern" />
+                        <div className="gamba-crash-card-image" style={{ backgroundImage: `url(/assets/gamba-games/${id}.png)` }} />
+                        <span>Play {name}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 

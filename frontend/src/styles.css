@@ -1754,6 +1754,442 @@ body {
   color: #f7e6bc;
 }
 
+.gamba-crash-view {
+  display: grid;
+  gap: 20px;
+  width: 100%;
+  color: #fff;
+  font-family: "DM Sans", "Roboto", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+.gamba-crash-info-modal {
+  position: absolute;
+  left: 50%;
+  top: 36px;
+  z-index: 10;
+  display: grid;
+  justify-items: center;
+  width: min(460px, calc(100% - 40px));
+  padding: 56px 32px 20px;
+  border-radius: 10px;
+  background: rgb(21, 21, 31);
+  color: #fff;
+  text-align: center;
+  transform: translateX(-50%);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+}
+
+.gamba-crash-info-modal h1 {
+  margin: 0 0 56px;
+}
+
+.gamba-crash-info-modal h1 img {
+  display: block;
+  height: 100px;
+  max-width: 220px;
+  object-fit: contain;
+}
+
+.gamba-crash-info-modal p {
+  max-width: 400px;
+  margin: 0 0 18px;
+  color: #fff;
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.gamba-crash-modal-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.gamba-crash-modal-close:hover {
+  color: #fff;
+}
+
+.gamba-crash-info-play,
+.gamba-crash-meta-controls button,
+.gamba-crash-wager button,
+.gamba-crash-play {
+  border: 0;
+  border-radius: 10px;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.gamba-crash-meta-controls button {
+  display: grid;
+  place-items: center;
+  width: 50px;
+  height: 50px;
+  background: transparent;
+  font-size: 1rem;
+}
+
+.gamba-crash-meta-controls button:hover {
+  background: rgba(255, 255, 255, 0.13);
+}
+
+.gamba-crash-info-play,
+.gamba-crash-play {
+  min-height: 44px;
+  padding: 0 1.25rem;
+  background: #8851ff;
+}
+
+.gamba-crash-info-play:hover,
+.gamba-crash-play:hover {
+  background: #9564ff;
+}
+
+.gamba-crash-info-play:disabled,
+.gamba-crash-play:disabled,
+.gamba-crash-wager button:disabled,
+.gamba-crash-slider input:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.gamba-crash-game {
+  display: grid;
+  gap: 5px;
+}
+
+.gamba-crash-screen {
+  position: relative;
+  height: 600px;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #0c0c11;
+}
+
+.gamba-crash-screen-inner {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: radial-gradient(ellipse at bottom, #1b2735 0%, #090a0f 100%);
+}
+
+.gamba-crash-stars-layer,
+.gamba-crash-lines-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  background: transparent;
+  transition: opacity 1s;
+  will-change: transform, opacity;
+}
+
+.gamba-crash-stars-layer-1,
+.gamba-crash-lines-layer-1 {
+  width: 1px;
+  height: 1px;
+  box-shadow:
+    33px 512px #fff, 92px 318px #fff, 178px 80px #fff, 264px 436px #fff, 350px 130px #fff,
+    476px 560px #fff, 590px 244px #fff, 704px 92px #fff, 818px 405px #fff, 940px 188px #fff,
+    1032px 540px #fff, 1126px 300px #fff, 1220px 76px #fff, 1324px 470px #fff, 1410px 210px #fff,
+    68px 920px #fff, 208px 760px #fff, 372px 860px #fff, 536px 705px #fff, 744px 822px #fff,
+    960px 700px #fff, 1132px 878px #fff, 1310px 742px #fff;
+  animation: gamba-crash-starfall 150s linear infinite;
+}
+
+.gamba-crash-stars-layer-2,
+.gamba-crash-lines-layer-2 {
+  width: 2px;
+  height: 2px;
+  box-shadow:
+    44px 220px #fff, 154px 530px #fff, 298px 145px #fff, 466px 418px #fff, 638px 92px #fff,
+    800px 580px #fff, 984px 308px #fff, 1160px 132px #fff, 1338px 520px #fff,
+    120px 812px #fff, 360px 730px #fff, 620px 890px #fff, 880px 760px #fff, 1190px 848px #fff;
+  animation: gamba-crash-starfall 100s linear infinite;
+}
+
+.gamba-crash-stars-layer-3,
+.gamba-crash-lines-layer-3 {
+  width: 3px;
+  height: 3px;
+  box-shadow:
+    80px 420px #fff, 260px 155px #fff, 500px 510px #fff, 730px 238px #fff, 1010px 466px #fff,
+    1250px 180px #fff, 1375px 610px #fff, 188px 790px #fff, 585px 850px #fff, 980px 760px #fff;
+  animation: gamba-crash-starfall 50s linear infinite;
+}
+
+.gamba-crash-lines-layer-1 {
+  height: 12px;
+  top: -12px;
+  animation-duration: 75s;
+}
+
+.gamba-crash-lines-layer-2 {
+  height: 25px;
+  top: -25px;
+  animation-duration: 6s;
+}
+
+.gamba-crash-lines-layer-3 {
+  width: 2px;
+  height: 50px;
+  top: -50px;
+  animation-duration: 3s;
+}
+
+.gamba-crash-multiplier {
+  position: relative;
+  z-index: 2;
+  color: #fff;
+  font-family: monospace;
+  font-size: 48px;
+  line-height: 1;
+  text-shadow: 0 0 20px #fff;
+}
+
+.gamba-crash-multiplier.is-win {
+  color: #00ff00;
+}
+
+.gamba-crash-multiplier.is-crashed {
+  color: #ff0000;
+}
+
+.gamba-crash-rocket {
+  position: absolute;
+  z-index: 1;
+  width: 120px;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+  transition: all 0.1s ease-out;
+}
+
+.gamba-crash-meta-controls {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  z-index: 6;
+  display: flex;
+  gap: 0;
+  padding: 10px;
+}
+
+.gamba-crash-loading {
+  position: relative;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 10px;
+}
+
+.gamba-crash-loading::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  width: 25%;
+  height: 100%;
+  border-radius: inherit;
+  background: #9564ff;
+  opacity: 0;
+}
+
+.gamba-crash-controls {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-height: 80px;
+  border-radius: 10px;
+  padding: 20px;
+  background: rgb(26, 27, 40);
+}
+
+.gamba-crash-wager {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.gamba-crash-wager label {
+  display: grid;
+  min-width: 150px;
+  border-radius: 10px;
+  padding: 0.35rem 0.75rem;
+  background: #0e0e16;
+}
+
+.gamba-crash-wager label span {
+  color: rgba(255, 255, 255, 0.46);
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.gamba-crash-wager input {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font-weight: 800;
+  outline: none;
+}
+
+.gamba-crash-wager button {
+  min-width: 46px;
+  background: #0e0e16;
+}
+
+.gamba-crash-wager button:hover {
+  background: #11111d;
+}
+
+.gamba-crash-slider {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 210px;
+  flex: 1 1 auto;
+}
+
+.gamba-crash-slider span {
+  color: #fff;
+  font-weight: 800;
+}
+
+.gamba-crash-slider input {
+  width: 100%;
+  accent-color: #9564ff;
+}
+
+.gamba-crash-play {
+  flex: 0 0 auto;
+  min-width: 140px;
+  align-self: stretch;
+}
+
+.gamba-crash-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+  background: rgb(26, 27, 40);
+}
+
+.gamba-crash-result span {
+  color: rgba(255, 255, 255, 0.56);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.gamba-crash-result strong {
+  color: #9564ff;
+  font-size: 1.35rem;
+}
+
+.gamba-crash-result small {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.gamba-crash-carousel {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.gamba-crash-card {
+  position: relative;
+  min-height: 112px;
+  overflow: hidden;
+  border-radius: 10px;
+  transition: transform 0.2s ease, outline 0.2s ease;
+}
+
+.gamba-crash-card:hover {
+  transform: scale(1.01);
+  outline: rgba(149, 100, 255, 0.2) solid 5px;
+}
+
+.gamba-crash-card-pattern,
+.gamba-crash-card-image {
+  position: absolute;
+  inset: 0;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.gamba-crash-card-pattern {
+  background-image: url("/assets/gamba-stuff.png");
+  background-repeat: repeat;
+  background-size: 100%;
+  opacity: 0;
+  animation: gamba-crash-card-tiles 5s linear infinite;
+}
+
+.gamba-crash-card:hover .gamba-crash-card-pattern {
+  opacity: 0.35;
+}
+
+.gamba-crash-card-image {
+  background-size: 90% auto;
+  transform: scale(0.9);
+  transition: transform 0.2s ease;
+}
+
+.gamba-crash-card:hover .gamba-crash-card-image {
+  transform: scale(1);
+}
+
+.gamba-crash-card span {
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  border-radius: 5px;
+  padding: 5px 10px;
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  opacity: 0;
+  text-transform: uppercase;
+  backdrop-filter: blur(20px);
+}
+
+.gamba-crash-card:hover span {
+  opacity: 1;
+}
+
+@keyframes gamba-crash-starfall {
+  from {
+    transform: translateY(-100vh);
+  }
+
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes gamba-crash-card-tiles {
+  from {
+    background-position: -100px 100px;
+  }
+
+  to {
+    background-position: 100px -100px;
+  }
+}
+
 .hi-aviator-shell {
   width: 100%;
   overflow: hidden;
