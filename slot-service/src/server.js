@@ -25,6 +25,10 @@ let slotopolPlayerToken = null;
 let slotopolSyncedRtp = null;
 let slotopolGameCatalogCache = null;
 let slotopolGameCatalogCacheAt = 0;
+const corsOrigins = String(process.env.CORS_ORIGIN || 'http://localhost:5173')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 const pool = mysql.createPool({
   host: process.env.DB_HOST || 'localhost',
@@ -144,7 +148,16 @@ const plinkoPayouts = {
 };
 
 app.use(helmet());
-app.use(cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:5173' }));
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || corsOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error('Origin is not allowed by CORS.'));
+  },
+}));
 app.use(express.json());
 
 function publicUser(user) {

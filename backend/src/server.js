@@ -32,9 +32,22 @@ const vendorGameInitParams = new URLSearchParams(vendorGameInitResponse);
 const cloakdDefaultPublicBaseUrl = process.env.NODE_ENV === 'production' ? 'https://casusdt.com' : 'http://localhost:5173';
 const aviatorRounds = new Map();
 const aviatorTickMs = 100;
+const corsOrigins = String(process.env.CORS_ORIGIN || 'http://localhost:5173')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 app.use(helmet());
-app.use(cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:5173' }));
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || corsOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error('Origin is not allowed by CORS.'));
+  },
+}));
 app.use(express.json({
   verify: (req, _res, buffer) => {
     req.rawBody = buffer;

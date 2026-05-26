@@ -11,7 +11,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-}
       DB_NAME: ${DB_NAME:-casusdt}
       JWT_SECRET: local-dev-secret-change-me
-      CORS_ORIGIN: http://localhost:5173
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173,https://casusdt.com,https://www.casusdt.com}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://casusdt.com}
       CLOAKD_API_URL: ${CLOAKD_API_URL:-}
       CLOAKD_PAYMENT_PATH: ${CLOAKD_PAYMENT_PATH:-/payment}
@@ -39,7 +39,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-}
       DB_NAME: ${DB_NAME:-casusdt}
       JWT_SECRET: local-dev-secret-change-me
-      CORS_ORIGIN: http://localhost:5173
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173,https://casusdt.com,https://www.casusdt.com}
       SLOTOPOL_URL: http://slotopol:8080
     ports:
       - "3100:3100"
