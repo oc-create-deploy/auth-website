@@ -2677,6 +2677,38 @@ body {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .gamba-crash-screen {
+    height: clamp(320px, 62svh, 520px);
+  }
+
+  .gamba-crash-view,
+  .gamba-crash-game {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .gamba-crash-controls {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+    padding: 14px;
+  }
+
+  .gamba-crash-wager {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) 44px 54px 54px;
+  }
+
+  .gamba-crash-wager label,
+  .gamba-crash-slider {
+    min-width: 0;
+  }
+
+  .gamba-crash-play {
+    min-height: 52px;
+    width: 100%;
+  }
+
   .aztec-stage.is-active {
     grid-template-columns: 1fr;
   }
@@ -2828,6 +2860,82 @@ body {
 
   .slot-console {
     grid-template-columns: 1fr;
+  }
+
+  .gamba-crash-view {
+    gap: 14px;
+  }
+
+  .gamba-crash-screen {
+    height: clamp(280px, 52svh, 430px);
+    border-radius: 8px;
+  }
+
+  .gamba-crash-info-modal {
+    top: 18px;
+    width: calc(100% - 24px);
+    padding: 44px 18px 18px;
+  }
+
+  .gamba-crash-info-modal h1 {
+    margin-bottom: 28px;
+  }
+
+  .gamba-crash-info-modal h1 img {
+    height: 74px;
+    max-width: 180px;
+  }
+
+  .gamba-crash-info-modal p {
+    font-size: 0.9rem;
+  }
+
+  .gamba-crash-multiplier {
+    font-size: clamp(2rem, 12vw, 3rem);
+  }
+
+  .gamba-crash-rocket {
+    width: clamp(76px, 24vw, 108px);
+  }
+
+  .gamba-crash-meta-controls {
+    padding: 6px;
+  }
+
+  .gamba-crash-meta-controls button {
+    width: 40px;
+    height: 40px;
+  }
+
+  .gamba-crash-controls {
+    gap: 12px;
+    min-height: 0;
+    padding: 12px;
+  }
+
+  .gamba-crash-wager {
+    grid-template-columns: 40px minmax(0, 1fr) 40px;
+    gap: 6px;
+  }
+
+  .gamba-crash-wager button {
+    min-width: 0;
+    min-height: 42px;
+  }
+
+  .gamba-crash-wager button:nth-of-type(3),
+  .gamba-crash-wager button:nth-of-type(4) {
+    grid-column: span 1;
+  }
+
+  .gamba-crash-slider {
+    gap: 0.5rem;
+  }
+
+  .gamba-crash-result {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.35rem;
   }
 
   .hi-aviator-topbar,
