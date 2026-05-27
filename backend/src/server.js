@@ -828,7 +828,7 @@ app.post('/api/admin/vendor-game/session', requireUser, requireAdmin, (req, res)
   });
 });
 
-app.post('/api/aviator/rounds', requireUser, requireAdmin, async (req, res) => {
+app.post('/api/aviator/rounds', requireUser, async (req, res) => {
   const betCents = parseGameBet(req.body.bet);
   const clientSeed = String(req.body.clientSeed || `user-${req.user.id}`).slice(0, 120);
 
@@ -904,7 +904,7 @@ app.post('/api/aviator/rounds', requireUser, requireAdmin, async (req, res) => {
   }
 });
 
-app.get('/api/aviator/rounds/:id', requireUser, requireAdmin, (req, res) => {
+app.get('/api/aviator/rounds/:id', requireUser, (req, res) => {
   const round = aviatorRounds.get(req.params.id);
 
   if (!round || round.userId !== req.user.id) {
@@ -920,7 +920,7 @@ app.get('/api/aviator/rounds/:id', requireUser, requireAdmin, (req, res) => {
   res.json({ round: publicRound });
 });
 
-app.post('/api/aviator/rounds/:id/cashout', requireUser, requireAdmin, async (req, res) => {
+app.post('/api/aviator/rounds/:id/cashout', requireUser, async (req, res) => {
   const round = aviatorRounds.get(req.params.id);
 
   if (!round || round.userId !== req.user.id) {

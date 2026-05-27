@@ -1236,15 +1236,15 @@ function App() {
           active: activeView === 'plinko',
           onSelect: () => showMemberView('plinko')
         },
+        {
+          key: 'aviator',
+          label: 'Crash',
+          description: 'Rocket multiplier game',
+          active: activeView === 'aviator',
+          onSelect: () => showMemberView('aviator')
+        },
         ...(user.isAdmin
           ? [
-              {
-                key: 'aviator',
-                label: 'Crash',
-                description: 'Rocket multiplier game',
-                active: activeView === 'aviator',
-                onSelect: () => showMemberView('aviator')
-              },
               {
                 key: 'admin',
                 label: 'Admin panel',
@@ -1621,7 +1621,7 @@ function App() {
                 </div>
               )}
 
-              {user.isAdmin && activeView === 'aviator' && (
+              {activeView === 'aviator' && (
                 <div className="gamba-crash-view">
                   <div className="gamba-crash-game">
                     <div className={'gamba-crash-screen ' + (aviatorRound ? 'is-flying' : aviatorResult?.crashed ? 'is-crashed' : '')}>
