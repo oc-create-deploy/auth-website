@@ -2765,7 +2765,24 @@ body {
   }
 
   .header-actions .balance-pill {
-    display: none;
+    display: block;
+    min-width: 0;
+    max-width: 42vw;
+    padding: 0.32rem 0.55rem;
+    text-align: right;
+  }
+
+  .header-actions .balance-pill span {
+    font-size: 0.58rem;
+    line-height: 1;
+  }
+
+  .header-actions .balance-pill strong {
+    overflow: hidden;
+    font-size: 0.86rem;
+    line-height: 1.15;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .app-stage {
