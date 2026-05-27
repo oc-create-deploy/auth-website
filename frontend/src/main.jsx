@@ -1215,6 +1215,11 @@ function App() {
     setMobileDrawerOpen(false);
   }
 
+  function showDepositScreen() {
+    setCashierTab('deposit');
+    showMemberView('cashier');
+  }
+
   const navigationItems = user
     ? [
         {
@@ -1296,10 +1301,15 @@ function App() {
           <div className="header-actions">
             {user ? (
               <>
-                <div className="balance-pill">
+                <button
+                  type="button"
+                  className="balance-pill balance-pill-action"
+                  aria-label="Open deposit screen"
+                  onClick={showDepositScreen}
+                >
                   <span>Balance</span>
                   <strong>{formatMoney(user.balanceCents)}</strong>
-                </div>
+                </button>
                 {user.isAdmin && (
                   <div className="admin-pill">
                     <span>Admin</span>

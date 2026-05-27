@@ -162,6 +162,24 @@ body {
   background: rgba(216, 180, 106, 0.08);
 }
 
+.balance-pill-action {
+  appearance: none;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.balance-pill-action:hover,
+.balance-pill-action:focus-visible {
+  border-color: rgba(246, 217, 143, 0.64);
+  background: rgba(216, 180, 106, 0.14);
+}
+
+.balance-pill-action:focus-visible {
+  outline: 2px solid rgba(246, 217, 143, 0.46);
+  outline-offset: 2px;
+}
+
 .admin-pill {
   display: inline-grid;
   place-items: center;
