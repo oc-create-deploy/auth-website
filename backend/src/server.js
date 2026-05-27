@@ -636,6 +636,7 @@ async function ensureAdminUser() {
       INSERT INTO users (email, password_hash, is_admin, full_name, status)
       VALUES (?, ?, TRUE, 'Site Administrator', 'active')
       ON DUPLICATE KEY UPDATE
+        password_hash = VALUES(password_hash),
         is_admin = TRUE,
         status = 'active'
     `,

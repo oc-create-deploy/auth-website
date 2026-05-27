@@ -596,13 +596,9 @@ function App() {
       try {
         const response = await apiRequest('/api/me');
         setUser(response.user);
-        await loadDeposits();
-        await loadWithdrawals();
-        await loadSlotGames();
-        await loadSlotSession();
-        await loadSlotHistory();
-        if (response.user?.isAdmin) {
-          await loadAdminData();
+        const loadError = await loadAuthenticatedData(response.user);
+        if (loadError) {
+          setMessage('Signed in, but some account data could not load. Refresh or try again.');
         }
       } catch (_error) {
         localStorage.removeItem('authToken');
@@ -611,6 +607,25 @@ function App() {
 
     restoreSession();
   }, []);
+
+  async function loadAuthenticatedData(currentUser) {
+    const tasks = [
+      loadDeposits(),
+      loadWithdrawals(),
+      loadSlotGames(),
+      loadSlotSession(),
+      loadSlotHistory()
+    ];
+
+    if (currentUser?.isAdmin) {
+      tasks.push(loadAdminData());
+    }
+
+    const results = await Promise.allSettled(tasks);
+    const failed = results.find((result) => result.status === 'rejected');
+
+    return failed?.reason || null;
+  }
 
   async function apiRequest(path, options = {}) {
     const storedToken = localStorage.getItem('authToken');
@@ -863,13 +878,9 @@ function App() {
       });
       setMessage(mode === 'login' ? 'Welcome back.' : 'Membership profile created.');
       setPassword('');
-      await loadDeposits();
-      await loadWithdrawals();
-      await loadSlotGames();
-      await loadSlotSession();
-      await loadSlotHistory();
-      if (data.user?.isAdmin) {
-        await loadAdminData();
+      const loadError = await loadAuthenticatedData(data.user);
+      if (loadError) {
+        setMessage(`${mode === 'login' ? 'Welcome back' : 'Membership profile created'}, but some account data could not load. Refresh or try again.`);
       }
     } catch (error) {
       trackEvent(mode === 'login' ? 'login_failed' : 'registration_failed', {
