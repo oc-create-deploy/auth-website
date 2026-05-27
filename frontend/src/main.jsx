@@ -596,10 +596,7 @@ function App() {
       try {
         const response = await apiRequest('/api/me');
         setUser(response.user);
-        const loadError = await loadAuthenticatedData(response.user);
-        if (loadError) {
-          setMessage('Signed in, but some account data could not load. Refresh or try again.');
-        }
+        void refreshAuthenticatedData(response.user);
       } catch (_error) {
         localStorage.removeItem('authToken');
       }
@@ -625,6 +622,14 @@ function App() {
     const failed = results.find((result) => result.status === 'rejected');
 
     return failed?.reason || null;
+  }
+
+  async function refreshAuthenticatedData(currentUser) {
+    const loadError = await loadAuthenticatedData(currentUser);
+
+    if (loadError) {
+      setMessage('Signed in, but some account data could not load. Refresh or try again.');
+    }
   }
 
   async function apiRequest(path, options = {}) {
@@ -878,10 +883,7 @@ function App() {
       });
       setMessage(mode === 'login' ? 'Welcome back.' : 'Membership profile created.');
       setPassword('');
-      const loadError = await loadAuthenticatedData(data.user);
-      if (loadError) {
-        setMessage(`${mode === 'login' ? 'Welcome back' : 'Membership profile created'}, but some account data could not load. Refresh or try again.`);
-      }
+      void refreshAuthenticatedData(data.user);
     } catch (error) {
       trackEvent(mode === 'login' ? 'login_failed' : 'registration_failed', {
         reason: error.message
