@@ -21,6 +21,25 @@ Then open:
 - Slot service health: http://localhost:3100/health
 - Slotopol health: http://localhost:8080/ping
 
+## Remote Deployment
+
+The deployment uses Docker Compose for the whole app stack except MySQL, which stays external and is configured through `.env`.
+
+On the server, from this directory:
+
+```bash
+./deploy.sh
+```
+
+That one command builds and starts:
+
+- `frontend` - Nginx serving the React build and proxying `/api` plus `/slot-api`
+- `backend` - authentication, admin, payments, and vendor game API
+- `slot-api` - slot settlement service using the same external MySQL DB
+- `slotopol` - slot engine container
+
+Before deploying, make sure `.env` exists on the server and contains the production DB, JWT, admin, CORS, public URL, payment, exposed port, and Slotopol settings. This repo intentionally keeps `.env` ignored by Git because it contains secrets.
+
 ## Casino Module
 
 Logged-in users can deposit demo funds, then spin the `Lucky Dollar` slot panel from the same page. The slot settlement service accepts the same `Authorization: Bearer <token>` header as the main API and debits or credits the shared MySQL user balance inside a transaction.

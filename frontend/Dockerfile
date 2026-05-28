@@ -3,10 +3,14 @@ FROM node:22-alpine AS build
 WORKDIR /app
 
 ARG VITE_API_URL=
+ARG VITE_POSTHOG_TOKEN=
+ARG VITE_POSTHOG_HOST=https://us.i.posthog.com
 ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_POSTHOG_TOKEN=$VITE_POSTHOG_TOKEN
+ENV VITE_POSTHOG_HOST=$VITE_POSTHOG_HOST
 
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 
 COPY index.html ./index.html
 COPY public ./public
