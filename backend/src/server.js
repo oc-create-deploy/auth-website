@@ -1,7 +1,7 @@
-import 'dotenv/config';
 import bcrypt from 'bcryptjs';
 import cors from 'cors';
 import crypto from 'crypto';
+import dotenv from 'dotenv';
 import express from 'express';
 import fs from 'fs';
 import helmet from 'helmet';
@@ -10,6 +10,10 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { initializeDatabase, pool } from './db.js';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+
 const app = express();
 const port = Number(process.env.PORT || 3000);
 const jwtSecret = process.env.JWT_SECRET || 'local-dev-secret-change-me';
@@ -17,7 +21,6 @@ const defaultCurrency = 'USD';
 const aviatorHouseEdge = 0.01;
 const aviatorMinMultiplier = 1;
 const aviatorMaxMultiplier = 1000000;
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const vendorGameRoot = path.resolve(__dirname, '../vendor-games/pragmatic-dragon');
 const vendorGameDesktopRoot = path.join(
   vendorGameRoot,

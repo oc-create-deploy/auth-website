@@ -642,7 +642,7 @@ function App() {
         ...options.headers
       }
     });
-    const data = await response.json();
+    const data = await readJsonResponse(response);
 
     if (!response.ok) {
       throw new Error(data.message || 'Request failed.');
@@ -661,13 +661,31 @@ function App() {
         ...options.headers
       }
     });
-    const data = await response.json();
+    const data = await readJsonResponse(response);
 
     if (!response.ok) {
       throw new Error(data.message || 'Slot request failed.');
     }
 
     return data;
+  }
+
+  async function readJsonResponse(response) {
+    const text = await response.text();
+
+    if (!text) {
+      return {};
+    }
+
+    try {
+      return JSON.parse(text);
+    } catch (_error) {
+      return {
+        message: response.ok
+          ? 'Response could not be read.'
+          : `Request failed with status ${response.status}.`
+      };
+    }
   }
 
   async function loadDeposits() {
