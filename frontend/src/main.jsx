@@ -2258,7 +2258,6 @@ function App() {
           ) : (
             <div className="public-layout">
               <section className="seo-hero" aria-labelledby="seoHeroTitle">
-                <div className="eyebrow">USDT crypto casino</div>
                 <h1 id="seoHeroTitle">Crypto casino for USDT slots, Crash and Plinko</h1>
                 <p>
                   CasUSDT.com brings casino games, crypto account balances and fast cashier tools into one focused online casino

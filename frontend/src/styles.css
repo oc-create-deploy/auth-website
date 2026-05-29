@@ -60,12 +60,12 @@ body {
 }
 
 .seo-hero h1 {
-  max-width: 12ch;
-  margin: 1rem 0;
+  max-width: 16ch;
+  margin: 0 0 1rem;
   color: #fff7e8;
   font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(3rem, 7vw, 5.85rem);
-  line-height: 0.95;
+  font-size: clamp(2.4rem, 5vw, 4.4rem);
+  line-height: 1.02;
 }
 
 .seo-hero > p {
@@ -2757,8 +2757,8 @@ body {
   }
 
   .seo-hero h1 {
-    max-width: 14ch;
-    font-size: clamp(2.75rem, 12vw, 4.75rem);
+    max-width: 16ch;
+    font-size: clamp(2.25rem, 9vw, 3.75rem);
   }
 
   .member-layout,
@@ -2919,7 +2919,7 @@ body {
   }
 
   .seo-hero h1 {
-    max-width: 11ch;
+    max-width: 15ch;
   }
 
   .seo-hero > p {
