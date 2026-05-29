@@ -2756,6 +2756,10 @@ body {
     align-items: start;
   }
 
+  .public-layout > .auth-card {
+    order: -1;
+  }
+
   .seo-hero h1 {
     max-width: 16ch;
     font-size: clamp(2.25rem, 9vw, 3.75rem);
