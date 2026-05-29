@@ -884,13 +884,17 @@ function App() {
 
   async function submit(event) {
     event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const submittedEmail = String(formData.get('email') || email).trim();
+    const submittedPassword = String(formData.get('password') || password);
+
     setLoading(true);
     setMessage('');
 
     try {
       const data = await apiRequest(`/api/${mode === 'login' ? 'login' : 'register'}`, {
         method: 'POST',
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email: submittedEmail, password: submittedPassword })
       });
 
       localStorage.setItem('authToken', data.token);
@@ -2263,6 +2267,7 @@ function App() {
                   <input
                     ref={emailInputRef}
                     id="email"
+                    name="email"
                     className="form-control form-control-lg"
                     type="email"
                     value={email}
@@ -2276,6 +2281,7 @@ function App() {
                   <label className="form-label" htmlFor="password">Password</label>
                   <input
                     id="password"
+                    name="password"
                     className="form-control form-control-lg"
                     type="password"
                     value={password}
