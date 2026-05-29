@@ -691,10 +691,17 @@ app.post('/api/login', async (req, res) => {
     return res.status(400).json({ message: 'Email and password are required.' });
   }
 
-  const [rows] = await pool.execute(
-    'SELECT id, email, password_hash, balance_cents, is_admin, full_name, status, created_at FROM users WHERE email = ? LIMIT 1',
-    [email]
-  );
+  let rows;
+
+  try {
+    [rows] = await pool.execute(
+      'SELECT id, email, password_hash, balance_cents, is_admin, full_name, status, created_at FROM users WHERE email = ? LIMIT 1',
+      [email]
+    );
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: 'Could not sign in. Please try again.' });
+  }
 
   const user = rows[0];
   const passwordMatches = user ? await bcrypt.compare(password, user.password_hash) : false;
