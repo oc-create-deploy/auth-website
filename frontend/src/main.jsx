@@ -2256,54 +2256,104 @@ function App() {
               </div>
             </div>
           ) : (
-            <div className="auth-card shadow-lg">
-              <div className="mb-4">
-                <h2>{title}</h2>
+            <div className="public-layout">
+              <section className="seo-hero" aria-labelledby="seoHeroTitle">
+                <div className="eyebrow">USDT crypto casino</div>
+                <h1 id="seoHeroTitle">Crypto casino for USDT slots, Crash and Plinko</h1>
+                <p>
+                  CasUSDT.com brings casino games, crypto account balances and fast cashier tools into one focused online casino
+                  experience for players who prefer USDT.
+                </p>
+
+                <div className="seo-game-list" aria-label="Crypto casino games">
+                  <span>Online slots</span>
+                  <span>Crash</span>
+                  <span>Plinko</span>
+                  <span>USDT balance</span>
+                </div>
+
+                <div className="seo-copy-grid">
+                  <section>
+                    <h2>USDT casino account</h2>
+                    <p>Register, sign in, manage a balance and move between cashier, slots and multiplier games from one account.</p>
+                  </section>
+                  <section>
+                    <h2>Crypto casino games</h2>
+                    <p>Play slots, Crash and Plinko from a responsive casino interface designed for desktop and mobile screens.</p>
+                  </section>
+                  <section>
+                    <h2>Responsible play</h2>
+                    <p>CasUSDT.com is intended for adults only. Players should follow local rules and keep wagering controlled.</p>
+                  </section>
+                </div>
+
+                <section className="seo-faq" aria-labelledby="seoFaqTitle">
+                  <h2 id="seoFaqTitle">Crypto casino FAQ</h2>
+                  <details>
+                    <summary>What is CasUSDT.com?</summary>
+                    <p>CasUSDT.com is a crypto casino experience focused on USDT balances and online casino games.</p>
+                  </details>
+                  <details>
+                    <summary>Which games can I play?</summary>
+                    <p>The casino includes slots, Crash and Plinko, with account tools for balance and cashier workflows.</p>
+                  </details>
+                  <details>
+                    <summary>Who can use the casino?</summary>
+                    <p>CasUSDT.com is for adults only. Availability depends on local rules and player responsibility.</p>
+                  </details>
+                </section>
+              </section>
+
+              <div className="auth-card shadow-lg">
+                <div className="mb-4">
+                  <h2>{title}</h2>
+                  <p className="text-secondary mb-0">Access your crypto casino account.</p>
+                </div>
+
+                <form onSubmit={submit}>
+                  <div className="mb-3">
+                    <label className="form-label" htmlFor="email">Email address</label>
+                    <input
+                      ref={emailInputRef}
+                      id="email"
+                      name="email"
+                      className="form-control form-control-lg"
+                      type="email"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      autoComplete="email"
+                      required
+                    />
+                  </div>
+
+                  <div className="mb-2">
+                    <label className="form-label" htmlFor="password">Password</label>
+                    <input
+                      id="password"
+                      name="password"
+                      className="form-control form-control-lg"
+                      type="password"
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                      minLength={mode === 'register' ? 8 : undefined}
+                      required
+                    />
+                  </div>
+
+                  {passwordHint && <div className="form-text mb-3">{passwordHint}</div>}
+
+                  <button className="btn btn-primary btn-lg w-100 mt-3" type="submit" disabled={loading}>
+                    {loading ? 'Please wait...' : submitLabel}
+                  </button>
+                </form>
+
+                {message && (
+                  <div className="alert alert-info mt-4 mb-0" role="status">
+                    {message}
+                  </div>
+                )}
               </div>
-
-              <form onSubmit={submit}>
-                <div className="mb-3">
-                  <label className="form-label" htmlFor="email">Email address</label>
-                  <input
-                    ref={emailInputRef}
-                    id="email"
-                    name="email"
-                    className="form-control form-control-lg"
-                    type="email"
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    autoComplete="email"
-                    required
-                  />
-                </div>
-
-                <div className="mb-2">
-                  <label className="form-label" htmlFor="password">Password</label>
-                  <input
-                    id="password"
-                    name="password"
-                    className="form-control form-control-lg"
-                    type="password"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                    minLength={mode === 'register' ? 8 : undefined}
-                    required
-                  />
-                </div>
-
-                {passwordHint && <div className="form-text mb-3">{passwordHint}</div>}
-
-                <button className="btn btn-primary btn-lg w-100 mt-3" type="submit" disabled={loading}>
-                  {loading ? 'Please wait...' : submitLabel}
-                </button>
-              </form>
-
-              {message && (
-                <div className="alert alert-info mt-4 mb-0" role="status">
-                  {message}
-                </div>
-              )}
             </div>
           )}
         </div>
