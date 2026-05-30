@@ -155,6 +155,16 @@ function formatMoney(cents = 0) {
   }).format(Number(cents) / 100);
 }
 
+function formatRtpPercent(value) {
+  const rtp = Number(value);
+
+  if (!Number.isFinite(rtp)) {
+    return '96%';
+  }
+
+  return `${rtp.toFixed(rtp % 1 === 0 ? 0 : 1)}%`;
+}
+
 function slotSymbolIcon(symbol) {
   const raw = String(symbol?.icon || symbol?.id || '');
   const symbolMap = {
@@ -1635,7 +1645,7 @@ function App() {
                         onClick={() => openSlotGame(game)}
                       >
                         <strong>{game.title}</strong>
-                        <small>{game.provider} · {game.lines} lines · {game.status}</small>
+                        <small>{game.provider} · {game.lines} lines · RTP {formatRtpPercent(game.rtpPercent)} · {game.status}</small>
                         <span className="btn btn-primary btn-sm">{disabled ? 'Disabled' : 'Open game'}</span>
                       </button>
                       );
