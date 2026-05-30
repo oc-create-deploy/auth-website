@@ -7,7 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config();
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
-const dbConfig = {
+export const dbConfig = {
   host: process.env.DB_HOST || 'localhost',
   port: Number(process.env.DB_PORT || 3306),
   user: process.env.DB_USER || 'auth_user',
@@ -21,6 +21,19 @@ const dbConfig = {
 };
 
 export const pool = mysql.createPool(dbConfig);
+
+export async function executeWithFreshConnection(sql, values = [], timeoutMs = 5000) {
+  const connection = await mysql.createConnection({
+    ...dbConfig,
+    connectTimeout: timeoutMs
+  });
+
+  try {
+    return await connection.execute({ sql, timeout: timeoutMs }, values);
+  } finally {
+    await connection.end().catch(() => {});
+  }
+}
 
 export async function initializeDatabase() {
   await pool.query(`

@@ -8,7 +8,7 @@ import helmet from 'helmet';
 import jwt from 'jsonwebtoken';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { initializeDatabase, pool } from './db.js';
+import { executeWithFreshConnection, initializeDatabase, pool } from './db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config();
@@ -102,11 +102,26 @@ const transientDbErrorCodes = new Set([
   'ETIMEDOUT',
   'EPIPE',
   'PROTOCOL_CONNECTION_LOST',
-  'PROTOCOL_SEQUENCE_TIMEOUT'
+  'PROTOCOL_SEQUENCE_TIMEOUT',
+  'PROTOCOL_ENQUEUE_AFTER_FATAL_ERROR',
+  'APP_TIMEOUT'
 ]);
 
 function isTransientDbError(error) {
   return transientDbErrorCodes.has(error?.code);
+}
+
+function withTimeout(promise, timeoutMs, message = 'Operation timed out.') {
+  let timeoutId;
+  const timeout = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      const error = new Error(message);
+      error.code = 'APP_TIMEOUT';
+      reject(error);
+    }, timeoutMs);
+  });
+
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
 }
 
 async function retryTransientDb(operation) {
@@ -719,18 +734,32 @@ app.post('/api/login', async (req, res) => {
 
   try {
     [rows] = await retryTransientDb(() =>
-      pool.execute(
-        'SELECT id, email, password_hash, balance_cents, is_admin, full_name, status, created_at FROM users WHERE email = ? LIMIT 1',
-        [email]
+      withTimeout(
+        executeWithFreshConnection(
+          'SELECT id, email, password_hash, balance_cents, is_admin, full_name, status, created_at FROM users WHERE email = ? LIMIT 1',
+          [email],
+          5000
+        ),
+        7000,
+        'Login lookup timed out.'
       )
     );
   } catch (error) {
-    console.error(error);
+    console.error('Login lookup failed:', error);
     return res.status(500).json({ message: 'Could not sign in. Please try again.' });
   }
 
   const user = rows[0];
-  const passwordMatches = user ? await bcrypt.compare(password, user.password_hash) : false;
+  let passwordMatches = false;
+
+  try {
+    passwordMatches = user
+      ? await withTimeout(bcrypt.compare(password, user.password_hash), 5000, 'Password check timed out.')
+      : false;
+  } catch (error) {
+    console.error('Login password check failed:', error);
+    return res.status(500).json({ message: 'Could not sign in. Please try again.' });
+  }
 
   if (!passwordMatches) {
     return res.status(401).json({ message: 'Invalid email or password.' });
