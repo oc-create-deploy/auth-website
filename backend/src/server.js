@@ -97,6 +97,30 @@ function publicUser(user) {
   };
 }
 
+const transientDbErrorCodes = new Set([
+  'ECONNRESET',
+  'ETIMEDOUT',
+  'EPIPE',
+  'PROTOCOL_CONNECTION_LOST',
+  'PROTOCOL_SEQUENCE_TIMEOUT'
+]);
+
+function isTransientDbError(error) {
+  return transientDbErrorCodes.has(error?.code);
+}
+
+async function retryTransientDb(operation) {
+  try {
+    return await operation();
+  } catch (error) {
+    if (!isTransientDbError(error)) {
+      throw error;
+    }
+
+    return operation();
+  }
+}
+
 async function requireUser(req, res, next) {
   const header = req.get('authorization') || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : '';
@@ -694,9 +718,11 @@ app.post('/api/login', async (req, res) => {
   let rows;
 
   try {
-    [rows] = await pool.execute(
-      'SELECT id, email, password_hash, balance_cents, is_admin, full_name, status, created_at FROM users WHERE email = ? LIMIT 1',
-      [email]
+    [rows] = await retryTransientDb(() =>
+      pool.execute(
+        'SELECT id, email, password_hash, balance_cents, is_admin, full_name, status, created_at FROM users WHERE email = ? LIMIT 1',
+        [email]
+      )
     );
   } catch (error) {
     console.error(error);

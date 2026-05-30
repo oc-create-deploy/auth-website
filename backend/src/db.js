@@ -15,7 +15,9 @@ const dbConfig = {
   database: process.env.DB_NAME || 'auth_app',
   waitForConnections: true,
   connectionLimit: 10,
-  queueLimit: 0
+  queueLimit: 0,
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 0
 };
 
 export const pool = mysql.createPool(dbConfig);
